@@ -4,9 +4,14 @@ Phases are ordered to kill the biggest risks first: GPU throughput (Phase 0) and
 end-to-end latency (Phase 1) decide whether the product feels usable — validate them
 before investing in driver and UI work. Each phase has an explicit exit gate.
 
-## Phase 0 — GPU benchmark
+## Phase 0 — GPU benchmark ✅ passed 2026-07-09
 
 **Goal:** know, not guess, whether the target GPU keeps up.
+
+**Result:** RTX 3080, p95 34.2 ms per window at defaults — 0.28x load, gate was < 100 ms.
+No tuning lever is worth taking (bf16 is a regression; shorter context saves 15% for real
+quality risk). Ship `CHUNK_MS=2400`, `CURRENT_MS=120`, fp32. Full table and reasoning in
+`docs/BENCHMARKS.md`; the shared-3090 delay is now attributed to contention, not GPU speed.
 
 - Write `server/bench.py` per `docs/PERFORMANCE.md` §4 (time
   `run_stream_chunk_forward` over a 2.4 s window, p50/p95 after warm-up).

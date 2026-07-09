@@ -21,7 +21,13 @@ server doesn't fail — it falls behind a little on every chunk, so **delay grow
 longer the user talks** within a turn. That is exactly the symptom observed on the
 shared 3090. A dedicated GPU + tuning is the fix, not more RAM.
 
+Measured 2026-07-09 (`docs/BENCHMARKS.md`): an idle **3080** runs the default window in
+34 ms p95 — a 0.28x load fraction, with no jitter. Since that is slower silicon than the
+3090, GPU speed cannot explain the shared box's delay; **contention (lever 4) is the
+cause.** Tuning turned out to be unnecessary on a dedicated GPU.
+
 VRAM is NOT the constraint: the full pipeline uses roughly 6–8 GB; a 3090 has 24 GB.
+(Measured peak torch allocation is ~2.5 GB, so even this is generous.)
 
 ## 2. End-to-end latency budget (Mac mic → meeting app hears converted voice)
 
