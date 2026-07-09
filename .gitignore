@@ -9,8 +9,10 @@ bench.json
 
 .DS_Store
 
-.agent/
-PROJECT.md
 
 # Swift build products
 .build/
+
+# Driver build: BlackHole is cloned by mac/driver/build.sh, not vendored
+mac/driver/BlackHole/
+mac/driver/build/

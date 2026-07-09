@@ -61,7 +61,7 @@ Caveat: run with a synthetic target and noise source. Timing is data-independent
 model has fixed shapes and no early exits, which the near-zero p95−p50 spread supports),
 but this run says nothing about audio quality.
 
-## KTH shared box ($XVC_HOST, RTX 3090)
+## KTH shared box (shared RTX 3090)
 
 _Not measured — and the 3080 result above makes it much less interesting._ A **slower**
 GPU runs the default window at 0.28x load with no jitter. A 3090 is ~1.2–1.4x a 3080 on
@@ -86,7 +86,7 @@ _Not yet provisioned. Re-run the sweep after `setup.sh` to confirm the settings 
 
 ## 2026-07-09 — 120 s continuous speech, KTH from campus network
 
-RTT to $XVC_HOST: **5.6 ms** avg (4.0 min / 9.8 max, 0% loss). `load-target` on an
+RTT to the KTH box: **5.6 ms** avg (4.0 min / 9.8 max, 0% loss). `load-target` on an
 8 s WAV: 0.9 s.
 
 | Metric | Value |

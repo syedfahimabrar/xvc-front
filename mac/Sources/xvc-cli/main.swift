@@ -7,7 +7,7 @@ import Foundation
 // Wear headphones. Monitoring your converted voice on speakers feeds it back into the mic.
 
 struct Options {
-    var host = "$XVC_HOST"
+    var host = ProcessInfo.processInfo.environment["XVC_HOST"] ?? ""
     var port = 5002
     var targetWav: String?
     var targetID: String?
@@ -36,7 +36,7 @@ func parseArguments() -> Options {
 
           --target-wav <path>   target speaker WAV, uploaded via load-target
           --target-id <id>      reuse an existing target_id instead of uploading
-          --host <host>         default $XVC_HOST
+          --host <host>         server host; defaults to $XVC_HOST
           --port <port>         default 5002
           --insecure            trust the dev server's self-signed cert
           --seconds <n>         run duration, default 120 (the gate)
@@ -69,6 +69,9 @@ func fail(_ message: String) -> Never {
 }
 
 let options = parseArguments()
+guard !options.host.isEmpty else {
+    fail("no server host: pass --host or set XVC_HOST")
+}
 guard options.targetWav != nil || options.targetID != nil else {
     fail("need --target-wav or --target-id (see --help)")
 }

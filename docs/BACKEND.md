@@ -158,7 +158,7 @@ the event loop keeps serving frames — keep that pattern.
 
 ## 6. Reference deployment shape (Hear-Me-Out, for orientation)
 
-- KTH GPU box `$XVC_HOST`, Docker container, ports published directly on the host
+- the KTH GPU box, Docker container, ports published directly on the host
   IP (no nginx/domain), self-signed TLS generated at launch
   (`openssl req -x509 ... -subj "/CN=*"`).
 - X-VC service launched as:

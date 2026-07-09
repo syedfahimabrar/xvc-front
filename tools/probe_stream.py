@@ -10,15 +10,16 @@ input sample k (the server emits the "current" region of each window in order). 
 timestamp each sent chunk, and when output sample k arrives we look up when input sample
 k was sent. That difference is mic-to-ear latency minus the audio hardware at both ends.
 
-    uv run --with websockets python probe_stream.py \
+    XVC_HOST=<gpu-box> uv run --with websockets python probe_stream.py \
         --target-wav target.wav --source-wav source.wav --out converted.wav
 
-Dev only: this disables TLS verification, because the KTH server has a self-signed cert
+Dev only: this disables TLS verification, because the dev server has a self-signed cert
 (docs/PROTOCOL.md §3). Never do this in the shipped app.
 """
 import argparse
 import asyncio
 import json
+import os
 import ssl
 import sys
 import time
@@ -205,7 +206,8 @@ async def run(args) -> int:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--host", default="$XVC_HOST")
+    p.add_argument("--host", default=os.environ.get("XVC_HOST"),
+                   help="server host; defaults to $XVC_HOST")
     p.add_argument("--port", type=int, default=5002)
     p.add_argument("--target-wav", help="target speaker WAV (uploaded via load-target)")
     p.add_argument("--target-id", help="reuse an existing target_id instead of uploading")
@@ -218,6 +220,8 @@ def main() -> int:
     p.add_argument("--insecure", action="store_true", help="skip TLS verification (self-signed dev cert)")
     p.add_argument("--no-tls", action="store_true", help="plain ws:// (local server without SSL_DIR)")
     args = p.parse_args()
+    if not args.host:
+        p.error("no server host: pass --host or set XVC_HOST")
     if not args.target_wav and not args.target_id:
         p.error("need --target-wav or --target-id")
     return asyncio.run(run(args))

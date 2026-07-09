@@ -14,9 +14,13 @@ The Mac side. No ML here — it only moves audio.
 speakers that feeds straight back into the mic.
 
 ```bash
+export XVC_HOST=<gpu-box-address>     # or pass --host
 swift build
 .build/debug/xvc-cli --target-wav /path/to/target.wav --insecure --seconds 120
 ```
+
+The server address is never hardcoded — it comes from `$XVC_HOST` or `--host`, so this
+repo can be public without publishing where the GPU box lives.
 
 The first run prompts for microphone access (the prompt is attributed to your terminal,
 not to `xvc-cli`). `--insecure` trusts the KTH server's self-signed cert and is scoped to

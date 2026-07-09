@@ -24,7 +24,7 @@ virtual microphone that every meeting app can select like a normal mic.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-Why this design (decisions already made — see `PROJECT.md`):
+Why this design (decisions already made):
 - **Virtual mic = universal input.** Every meeting app already has a mic picker; one
   virtual device covers all of them. No plugins.
 - **GPU stays remote.** X-VC needs a CUDA GPU (~20× realtime compute); the Mac only
@@ -44,7 +44,6 @@ Why this design (decisions already made — see `PROJECT.md`):
 
 ## Documentation
 
-- `PROJECT.md` — project brief + locked decisions for agent sessions
 - `docs/PROTOCOL.md` — exact wire protocol (verified against the working Hear-Me-Out server)
 - `docs/BACKEND.md` — everything needed to stand up the GPU server (repo, commit, models, pins, env)
 - `docs/PERFORMANCE.md` — latency budget, why a 3090 struggles, tuning levers
@@ -66,4 +65,4 @@ Full detail in `docs/ROADMAP.md`.
 
 Spun out of the Hear-Me-Out research project (KTH). The wire protocol and streaming
 window math are lifted verbatim from its battle-tested X-VC service, so Phase 1 can be
-tested against the existing server at `$XVC_HOST:5002` before any new backend exists.
+tested against the the existing KTH server before any new backend exists.
