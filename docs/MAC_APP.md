@@ -34,6 +34,10 @@ Implementation notes:
   "XVC Mic" device UID (`kAudioOutputUnitProperty_CurrentDevice` /
   `AVAudioEngine.outputNode` device selection via `AudioUnitSetProperty`). Whatever the
   app renders there appears at the device's input side, which meeting apps read.
+- **No makeup gain on the converted audio.** X-VC normalizes loudness toward the target,
+  so its output already sits near full scale — measured peak 0.985 from a source peaking
+  at 0.275 (`docs/BENCHMARKS.md`). A quiet mic tempts you to add gain; adding it clips.
+  If protection is wanted, use a soft limiter on the playout path.
 - Optional monitor toggle: also render to the real speakers/headphones so the user can
   hear their converted voice ("hear myself" — off by default, it's distracting).
 

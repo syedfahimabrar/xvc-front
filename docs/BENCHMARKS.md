@@ -131,13 +131,25 @@ of mangled audio.
 
 ## Does it actually sound like the target?
 
-Autocorrelation pitch, as an objective check (not a substitute for listening):
+Autocorrelation pitch, as an objective check (not a substitute for listening). Two runs,
+in opposite pitch directions, so the result can't be an artifact of the model drifting
+one way:
 
-| | f0 |
-|---|---|
-| source (`say -v Daniel`) | 112.7 Hz |
-| target (`say -v Samantha`) | 177.8 Hz |
-| **converted** | **170.2 Hz** |
+| Run | source | target | converted |
+|---|---|---|---|
+| synthetic (`say` Daniel → Samantha) | 112.7 Hz | 177.8 Hz | **170.2 Hz** |
+| real voices (35.8 s recording → `Target_2.wav`) | 156.9 Hz | 109.4 Hz | **106.7 Hz** |
 
-The output tracks the target speaker, not the source. Converted RMS 0.096, peak 0.68 —
-no silence, no clipping.
+The output tracks the target speaker in both directions. Real-voice run latency was
+unchanged: p50 197.0 ms, p95 203.0 ms, drift +0.8 ms.
+
+## Output sits near full scale — do not apply makeup gain
+
+X-VC normalizes loudness toward the target. The real-voice source peaked at 0.275 (a
+quiet recording); the **converted output peaked at 0.985** — 0.13 dB of headroom, from an
+input 11 dB below it.
+
+Nothing clipped (0 samples at the int16 ceiling; 7 of 570k above 0.9; crest factor
+26.4 dB, normal for speech). But the margin is thin enough that any client-side gain
+would clip, and a quiet mic makes adding gain tempting. Don't. If protection is wanted,
+use a soft limiter on the playout path, never a fixed boost.
