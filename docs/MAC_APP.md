@@ -52,6 +52,13 @@ Implementation notes:
   "XVC Mic" device UID (`kAudioOutputUnitProperty_CurrentDevice` /
   `AVAudioEngine.outputNode` device selection via `AudioUnitSetProperty`). Whatever the
   app renders there appears at the device's input side, which meeting apps read.
+- **The second engine is not optional.** An `AVAudioEngine`'s `inputNode` and `outputNode`
+  share one I/O audio unit on macOS, so `kAudioOutputUnitProperty_CurrentDevice` re-points
+  *both*. Doing this on the capture engine makes the mic read XVC Mic's own loopback — you
+  hear yourself, and the server converts its own output. It fails quietly; the only tell was
+  the mic's reported rate flipping from 48 kHz to 16 kHz (XVC Mic advertises 16 kHz, so the
+  engine happily reconfigured the device). Always print the device each engine bound to, and
+  assert they differ.
 - **No makeup gain on the converted audio.** X-VC normalizes loudness toward the target,
   so its output already sits near full scale — measured peak 0.985 from a source peaking
   at 0.275 (`docs/BENCHMARKS.md`). A quiet mic tempts you to add gain; adding it clips.

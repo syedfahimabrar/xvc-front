@@ -1,12 +1,18 @@
 import AVFoundation
 
-/// Mic capture -> 16 kHz mono float32, and converted audio -> speakers.
+/// Mic capture -> 16 kHz mono float32, and converted audio -> an output device.
 ///
-/// Phase 1 uses one engine and the default output device (headphones — monitoring your own
-/// converted voice through speakers will feed back into the mic). Phase 2 re-points the
-/// playout at the "XVC Mic" virtual device instead; see docs/MAC_APP.md §1.
+/// **Two engines, deliberately.** On macOS an AVAudioEngine's `inputNode` and `outputNode`
+/// share one I/O audio unit, so `kAudioOutputUnitProperty_CurrentDevice` re-points *both*.
+/// With a single engine, selecting "XVC Mic" as the output silently made it the input too:
+/// the mic then read XVC Mic's own loopback (our converted audio) and fed it back to the
+/// server. The tell was the reported mic rate flipping from 48 kHz to 16 kHz.
+///
+/// So `captureEngine` stays on the default input device and `playoutEngine` owns the output
+/// device. This is what docs/MAC_APP.md §1 prescribes.
 final class AudioIO {
-    let engine = AVAudioEngine()
+    let captureEngine = AVAudioEngine()
+    let playoutEngine = AVAudioEngine()
     let jitter: JitterBuffer
 
     /// Called on the capture thread with 16 kHz mono PCM and the time the audio was
@@ -18,27 +24,26 @@ final class AudioIO {
     private var sourceNode: AVAudioSourceNode?
     private var sinkNode: AVAudioSinkNode?
 
-    /// Seconds of audio between the socket and the ear: what's queued in the jitter buffer
-    /// plus what the output hardware holds. Used to turn "arrived" into "heard".
-    var pendingPlayout: Double {
-        Double(jitter.bufferedFrames) / 16000.0 + engine.outputNode.presentationLatency
-    }
-
     private let deviceBufferFrames: Int?
     private let mute: Bool
     private let outputDevice: AudioDevices.Device?
 
-    /// - Parameter deviceBufferFrames: optionally ask the input device for a smaller IO
-    ///   buffer. Capture granularity comes from the device (typically 512 frames = 10.7 ms),
-    ///   not from us, so leave this nil unless you are chasing the last few milliseconds.
-    ///   It mutates a system-wide device property, so other audio apps see it too.
-    /// - Parameter mute: render the converted audio but at zero volume. The engine still
-    ///   pulls the jitter buffer on the same schedule, so timing is unchanged — it just
-    ///   lets you measure latency on speakers without the mic hearing the output and
-    ///   feeding the server its own voice.
-    /// - Parameter outputDevice: where to render the converted voice. nil = default output
-    ///   (headphones, Phase 1). Pass the "XVC Mic" virtual device for Phase 2: whatever we
-    ///   render to its output side appears at its input side, which meeting apps read.
+    /// Seconds of audio between the socket and the ear: what's queued in the jitter buffer
+    /// plus what the output hardware holds. Used to turn "arrived" into "heard".
+    var pendingPlayout: Double {
+        Double(jitter.bufferedFrames) / 16000.0 + playoutEngine.outputNode.presentationLatency
+    }
+
+    /// - Parameters:
+    ///   - deviceBufferFrames: optionally ask the input device for a smaller IO buffer.
+    ///     Capture granularity comes from the device (typically 512 frames = 10.7 ms), so
+    ///     leave nil unless chasing the last few ms. It mutates a system-wide property.
+    ///   - mute: render the converted audio at zero volume. The engine still pulls the
+    ///     jitter buffer on the same schedule, so timing is unchanged — it just lets you
+    ///     measure latency on speakers without the mic hearing the output.
+    ///   - outputDevice: where to render the converted voice. nil = default output
+    ///     (headphones, Phase 1). Pass "XVC Mic" for Phase 2: what we render to its output
+    ///     side appears at its input side, which meeting apps read.
     init(jitter: JitterBuffer,
          deviceBufferFrames: Int? = nil,
          mute: Bool = false,
@@ -49,51 +54,79 @@ final class AudioIO {
         self.outputDevice = outputDevice
     }
 
+    /// What the engines actually ended up bound to. Always report these: the loopback bug
+    /// above was invisible precisely because nothing printed the input device.
+    var inputDeviceName: String {
+        AudioDevices.currentDevice(of: captureEngine.inputNode.audioUnit)?.name ?? "default"
+    }
+    var outputDeviceName: String {
+        AudioDevices.currentDevice(of: playoutEngine.outputNode.audioUnit)?.name ?? "default"
+    }
+
     func start() throws {
-        // Must happen before the engine starts: CoreAudio will not re-point a running
-        // output unit. Touching outputNode here also instantiates it.
-        if let outputDevice { try AudioDevices.setOutputDevice(engine, to: outputDevice) }
+        try startPlayout()
+        try startCapture()
+    }
 
-        let input = engine.inputNode
+    func stop() {
+        captureEngine.stop()
+        playoutEngine.stop()
+    }
 
-        if let frames = deviceBufferFrames { setDefaultInputBufferFrames(UInt32(frames)) }
+    // MARK: - playout (converted audio -> output device)
 
-        if ProcessInfo.processInfo.environment["XVC_DEBUG_TAP"] != nil {
-            let i = input.inputFormat(forBus: 0), o = input.outputFormat(forBus: 0)
-            let line = "[fmt] inputNode.inputFormat \(i.sampleRate) Hz/\(i.channelCount)ch  "
-                + "outputFormat \(o.sampleRate) Hz/\(o.channelCount)ch\n"
-            FileHandle.standardError.write(line.data(using: .utf8)!)
+    private func startPlayout() throws {
+        // Must happen before the engine starts: CoreAudio will not re-point a running unit.
+        if let outputDevice {
+            try AudioDevices.setOutputDevice(playoutEngine, to: outputDevice)
         }
 
+        let source = AVAudioSourceNode(format: vcFormat) { [jitter] _, _, frameCount, audioBufferList in
+            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            guard let raw = buffers[0].mData else { return noErr }
+            let mono = raw.assumingMemoryBound(to: Float.self)
+            jitter.render(into: mono, frames: Int(frameCount))
+
+            // A virtual mic is 2-channel; put the same mono signal on every channel.
+            for channel in 1..<buffers.count {
+                if let dst = buffers[channel].mData {
+                    dst.assumingMemoryBound(to: Float.self).update(from: mono, count: Int(frameCount))
+                }
+            }
+            return noErr
+        }
+        self.sourceNode = source
+        playoutEngine.attach(source)
+
+        // The main mixer resamples 16 kHz -> whatever rate the output device runs at.
+        playoutEngine.connect(source, to: playoutEngine.mainMixerNode, format: vcFormat)
+        if mute { playoutEngine.mainMixerNode.outputVolume = 0 }
+
+        playoutEngine.prepare()
+        try playoutEngine.start()
+    }
+
+    // MARK: - capture (mic -> 16 kHz mono)
+
+    private func startCapture() throws {
+        if let frames = deviceBufferFrames { setDefaultInputBufferFrames(UInt32(frames)) }
+
+        let input = captureEngine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0 else {
             throw XVCError("no input device (or microphone permission denied)")
         }
-
         guard let converter = AVAudioConverter(from: inputFormat, to: vcFormat) else {
             throw XVCError("cannot convert \(inputFormat.sampleRate) Hz / \(inputFormat.channelCount) ch to 16 kHz mono")
         }
         converter.downmix = true   // stereo mics exist; the server wants mono
         self.converter = converter
 
-        // Playout: a source node pulls from the jitter buffer at whatever rate the output
-        // device runs. The main mixer resamples 16 kHz -> device rate for us.
-        let source = AVAudioSourceNode(format: vcFormat) { [jitter] _, _, frameCount, audioBufferList in
-            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
-            guard let raw = buffers[0].mData else { return noErr }
-            jitter.render(into: raw.assumingMemoryBound(to: Float.self), frames: Int(frameCount))
-            return noErr
-        }
-        self.sourceNode = source
-        engine.attach(source)
-        engine.connect(source, to: engine.mainMixerNode, format: vcFormat)
-
         // Capture via a sink node, NOT installTap. Measured on macOS 15: installTap delivers
         // 4800-frame (100 ms) buffers regardless of its `bufferSize` argument, even though the
-        // device is running 512-frame buffers. Audio that only materialises every 100 ms
-        // cannot be sent sooner, so the server received input in clumps and returned it in
-        // clumps — a ~100 ms latency tail. AVAudioSinkNode hands us the device's own
-        // granularity. (docs/MAC_APP.md §1 assumed 5-20 ms here; the tap made that a lie.)
+        // device runs 512-frame buffers. Audio that only materialises every 100 ms cannot be
+        // sent sooner, so the server received input in clumps and returned it in clumps — a
+        // ~100 ms latency tail. AVAudioSinkNode hands us the device's own granularity.
         let scratch = AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: 16384)!
         let sink = AVAudioSinkNode { [weak self] timestamp, frameCount, audioBufferList in
             self?.handleCapture(audioBufferList,
@@ -104,21 +137,15 @@ final class AudioIO {
             return noErr
         }
         self.sinkNode = sink
-        engine.attach(sink)
-        engine.connect(input, to: sink, format: inputFormat)
+        captureEngine.attach(sink)
+        captureEngine.connect(input, to: sink, format: inputFormat)
 
-        if mute { engine.mainMixerNode.outputVolume = 0 }
-
-        engine.prepare()
-        try engine.start()
-    }
-
-    func stop() {
-        engine.stop()
+        captureEngine.prepare()
+        try captureEngine.start()
     }
 
     /// Ask the default input device for a smaller IO buffer. The device clamps to its own
-    /// supported range, so read the value back rather than assuming it took.
+    /// supported range.
     private func setDefaultInputBufferFrames(_ frames: UInt32) {
         var deviceAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
@@ -133,23 +160,9 @@ final class AudioIO {
             mSelector: kAudioDevicePropertyBufferFrameSize,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain)
-
-        var current: UInt32 = 0
-        size = UInt32(MemoryLayout<UInt32>.size)
-        AudioObjectGetPropertyData(device, &bufferAddress, 0, nil, &size, &current)
-
         var wanted = frames
-        let status = AudioObjectSetPropertyData(device, &bufferAddress, 0, nil,
-                                                UInt32(MemoryLayout<UInt32>.size), &wanted)
-
-        var applied: UInt32 = 0
-        size = UInt32(MemoryLayout<UInt32>.size)
-        AudioObjectGetPropertyData(device, &bufferAddress, 0, nil, &size, &applied)
-
-        if ProcessInfo.processInfo.environment["XVC_DEBUG_TAP"] != nil {
-            let line = "[dev] buffer frames: was \(current), asked \(frames), now \(applied) (status \(status))\n"
-            FileHandle.standardError.write(line.data(using: .utf8)!)
-        }
+        AudioObjectSetPropertyData(device, &bufferAddress, 0, nil,
+                                   UInt32(MemoryLayout<UInt32>.size), &wanted)
     }
 
     private var debugTapLast = 0.0

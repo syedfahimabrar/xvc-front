@@ -184,10 +184,15 @@ do {
     fail("\(error.localizedDescription)")
 }
 
-let inputFormat = audio.engine.inputNode.outputFormat(forBus: 0)
-print(String(format: "[xvc] mic %.0f Hz / %d ch -> 16 kHz | output hw latency %.1f ms | prime %.0f ms",
-             inputFormat.sampleRate, inputFormat.channelCount,
-             audio.engine.outputNode.presentationLatency * 1000, options.primeMs))
+let inputFormat = audio.captureEngine.inputNode.outputFormat(forBus: 0)
+print(String(format: "[xvc] in  \"%@\" %.0f Hz / %d ch -> 16 kHz",
+             audio.inputDeviceName, inputFormat.sampleRate, inputFormat.channelCount))
+print(String(format: "[xvc] out \"%@\" | hw latency %.1f ms | prime %.0f ms",
+             audio.outputDeviceName,
+             audio.playoutEngine.outputNode.presentationLatency * 1000, options.primeMs))
+if audio.inputDeviceName == audio.outputDeviceName {
+    fail("input and output are both \"\(audio.inputDeviceName)\" — the mic would hear its own output")
+}
 print("[xvc] speak now — rolling latency every 2 s (Ctrl-C to stop early)\n")
 
 // 4. Report while it runs.

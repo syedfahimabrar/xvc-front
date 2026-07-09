@@ -50,6 +50,8 @@ enum AudioDevices {
 
     /// Point an AVAudioEngine's output at a specific device. Must be called before the
     /// engine starts — CoreAudio will not switch a running output unit.
+    /// NOTE: on macOS an engine's input and output share one I/O unit, so this re-points
+    /// BOTH. Use a dedicated playout engine, never the one that owns the mic.
     static func setOutputDevice(_ engine: AVAudioEngine, to device: Device) throws {
         guard let unit = engine.outputNode.audioUnit else {
             throw XVCError("output node has no audio unit")
@@ -64,6 +66,17 @@ enum AudioDevices {
         guard status == noErr else {
             throw XVCError("could not select output device \"\(device.name)\" (OSStatus \(status))")
         }
+    }
+
+    /// Which device an audio unit is currently bound to. The single-engine loopback bug was
+    /// invisible because nothing ever asked this question.
+    static func currentDevice(of unit: AudioUnit?) -> Device? {
+        guard let unit else { return nil }
+        var id = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioUnitGetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
+                                   kAudioUnitScope_Global, 0, &id, &size) == noErr else { return nil }
+        return all().first { $0.id == id }
     }
 
     // MARK: - property helpers
