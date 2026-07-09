@@ -41,9 +41,12 @@ Implementation notes:
   and output both run at 16 kHz, so nothing ever drains that excess: it becomes permanent
   latency whose size is decided by luck. Measured, p50 wandered 417–511 ms across runs with
   identical settings. Fix: watch the buffer's low-water mark over a ~0.5 s window, and drop
-  depth that never gets used, splicing with a ~4 ms cross-fade so it doesn't click. Converge
-  on a trough of **40 ms** — below that it underruns, above it you are just paying latency
-  (measured floor; see `docs/BENCHMARKS.md`).
+  depth that never gets used, splicing with a ~4 ms cross-fade so it doesn't click.
+- **The trough must adapt, not be a constant.** A fixed 40 ms trough passed 18 s tests and
+  then underran 7 times in 2 minutes: the shrink parks the buffer exactly at the trough,
+  leaving no margin for arrival jitter (~28 ms on the KTH path). Grow the trough 20 ms on
+  every underrun and let the buffer find its own floor — 100 ms, here. Start the guess at
+  80 ms. See `docs/BENCHMARKS.md`.
 - **Playout into the virtual mic:** the virtual device is an output like any other —
   create a second `AVAudioEngine` (or `AudioUnit`) whose output device is set to the
   "XVC Mic" device UID (`kAudioOutputUnitProperty_CurrentDevice` /

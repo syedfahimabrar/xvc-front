@@ -136,12 +136,18 @@ of mangled audio.
 2026-07-09, MacBook mic (48 kHz, 512-frame device buffer) → KTH server → headphones.
 Runs below used a silent mic; latency accounting is independent of what is spoken.
 
-| Setting | p50 | p95 | drift / 60 s | underruns |
+| Run | p50 | p95 | drift | underruns |
 |---|---|---|---|---|
-| **defaults** (prime 180 ms, trough 40 ms) | **381.9 ms** | **390.6 ms** | +1.1 ms | 1 |
+| 2 min, real speech, fixed 40 ms trough | 381.4 ms | 465.7 ms | +3.4 ms | 7 |
+| **60 s, adaptive trough (defaults)** | **406 ms** | **442 ms** | +1.1 ms | 1 |
 
-Gate is p95 < 500 ms. The budget closes: 226 ms wire + 160 ms buffer (one 120 ms burst +
-40 ms trough) + 1.5 ms output hardware ≈ 388 ms.
+Gate is p95 < 500 ms with flat drift; both pass. The budget closes: 230 ms wire + 220 ms
+buffer (one 120 ms burst + 100 ms settled trough) + 1.5 ms output hardware ≈ 450 ms.
+
+The 2-minute run was played on **speakers, not headphones**, so the mic re-captured the
+converted output and the server converted its own voice. Latency accounting is content-
+independent, so those numbers stand; audio quality was not assessed. Use `--mute` to
+measure latency without headphones.
 
 ## The two client-side bugs worth remembering
 
@@ -162,17 +168,29 @@ mattered; chunk *regularity* did. Switching to `AVAudioSinkNode` gave device gra
 **Jitter buffer depth is decided by luck unless it shrinks.** Priming waits for 2880
 frames, but bursts are indivisible 1920-frame lumps, so playback begins holding ~3840
 (240 ms). Nothing drains it — both ends run at 16 kHz — so it is permanent latency. p50
-wandered 417–511 ms across identical runs. With adaptive shrink (drop unused depth, splice
-with a 4 ms cross-fade) the buffer converges to a set trough:
+wandered 417–511 ms across identical runs. Fix: watch the low-water mark and splice out
+depth that is never used, cross-fading 4 ms so it doesn't click.
 
-| trough | p50 | p95 | underruns / 18 s |
-|---|---|---|---|
-| 20 ms | 368.9 ms | 476.8 ms | 9 |
-| **40 ms** | **380.2 ms** | **387.8 ms** | **0** |
-| 60 ms | 406.0 ms | 411.7 ms | 0 |
+**But the trough it converges to cannot be a constant.** A fixed 40 ms trough looked
+optimal over 18 s runs (p95 387.8 ms, no underruns) and then produced **7 underruns in a
+2-minute run**: the shrink drives depth to exactly the trough and parks there, with no
+margin for the ~28 ms of arrival jitter (wire p50 231 / p95 259). Each underrun re-primes,
+the shrink trims it back down, and it underruns again.
 
-40 ms is the floor. Below it the buffer empties between bursts; above it you pay latency
-for nothing.
+So the trough grows 20 ms on every underrun, and the buffer discovers its own floor:
+
+| starting trough | settles at | p50 | p95 | underruns / 45-60 s |
+|---|---|---|---|---|
+| 40 ms | 100 ms | — | 443 ms | 3 |
+| **80 ms** | **100 ms** | **406 ms** | **442 ms** | **1** |
+| 100 ms | 120 ms | 408.6 ms | 461.9 ms | 1 |
+
+100 ms is this path's real floor — 2.5x the 40 ms that short runs suggested. Starting at
+80 ms reaches it with one underrun; starting higher just settles higher. The cost over the
+(unsafe) fixed 40 ms trough is ~25 ms of latency, in exchange for not clicking every 20 s.
+
+Lesson worth keeping: **short runs cannot measure a jitter floor.** The failure only
+appears once the shrink has had time to reach the trough.
 
 ## Where the remaining latency lives
 

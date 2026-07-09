@@ -25,14 +25,20 @@ final class AudioIO {
     }
 
     private let deviceBufferFrames: Int?
+    private let mute: Bool
 
     /// - Parameter deviceBufferFrames: optionally ask the input device for a smaller IO
     ///   buffer. Capture granularity comes from the device (typically 512 frames = 10.7 ms),
     ///   not from us, so leave this nil unless you are chasing the last few milliseconds.
     ///   It mutates a system-wide device property, so other audio apps see it too.
-    init(jitter: JitterBuffer, deviceBufferFrames: Int? = nil) {
+    /// - Parameter mute: render the converted audio but at zero volume. The engine still
+    ///   pulls the jitter buffer on the same schedule, so timing is unchanged — it just
+    ///   lets you measure latency on speakers without the mic hearing the output and
+    ///   feeding the server its own voice.
+    init(jitter: JitterBuffer, deviceBufferFrames: Int? = nil, mute: Bool = false) {
         self.jitter = jitter
         self.deviceBufferFrames = deviceBufferFrames
+        self.mute = mute
     }
 
     func start() throws {
@@ -88,6 +94,8 @@ final class AudioIO {
         self.sinkNode = sink
         engine.attach(sink)
         engine.connect(input, to: sink, format: inputFormat)
+
+        if mute { engine.mainMixerNode.outputVolume = 0 }
 
         engine.prepare()
         try engine.start()

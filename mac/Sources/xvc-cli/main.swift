@@ -14,8 +14,9 @@ struct Options {
     var insecure = false
     var seconds = 120.0
     var primeMs = 180.0
-    var troughMs = 40.0
+    var troughMs = 80.0   // a starting guess; the buffer grows it on each underrun
     var deviceBufferFrames: Int?
+    var mute = false
 }
 
 func parseArguments() -> Options {
@@ -40,8 +41,9 @@ func parseArguments() -> Options {
           --insecure            trust the dev server's self-signed cert
           --seconds <n>         run duration, default 120 (the gate)
           --prime-ms <n>        jitter buffer prime depth, default 180
-          --trough-ms <n>       depth to converge on between bursts, default 40
+          --trough-ms <n>       starting buffer trough, default 80 (grows on underrun)
           --device-buffer <n>   ask the mic for an N-frame IO buffer (system-wide; rarely needed)
+          --mute                measure latency without playing audio (no headphones needed)
 
         Wear headphones. Grant Terminal microphone access in System Settings.
         """)
@@ -57,6 +59,7 @@ func parseArguments() -> Options {
     if let v = value("--trough-ms"), let m = Double(v) { options.troughMs = m }
     if let v = value("--device-buffer"), let f = Int(v) { options.deviceBufferFrames = f }
     options.insecure = args.contains("--insecure")
+    options.mute = args.contains("--mute")
     return options
 }
 
@@ -117,7 +120,7 @@ final class StopSignal: @unchecked Sendable {
 
 let jitter = JitterBuffer(primeFrames: Int(options.primeMs / 1000.0 * 16000),
                           targetTroughFrames: Int(options.troughMs / 1000.0 * 16000))
-let audio = AudioIO(jitter: jitter, deviceBufferFrames: options.deviceBufferFrames)
+let audio = AudioIO(jitter: jitter, deviceBufferFrames: options.deviceBufferFrames, mute: options.mute)
 let tracker = LatencyTracker()
 let stopSignal = StopSignal()
 
@@ -194,9 +197,9 @@ print(String(format: """
 [xvc] steady-state mic-to-ear latency over %d frames
   p50 %6.1f ms   p95 %6.1f ms   min %6.1f ms   max %6.1f ms
   drift (last third - first third): %+.1f ms
-  jitter buffer: %d underruns, %d overruns, trimmed %.0f ms of standing latency
+  jitter buffer: %d underruns, %d overruns, trimmed %.0f ms; settled trough %.0f ms
 """, s.count, s.p50 * 1000, s.p95 * 1000, s.min * 1000, s.max * 1000, s.drift * 1000,
-     jitter.underruns, jitter.overruns, Double(jitter.trimmedFrames) / 16.0))
+     jitter.underruns, jitter.overruns, Double(jitter.trimmedFrames) / 16.0, jitter.learnedTroughMs))
 
 // Split the number so a regression lands in the right place: `wire` should track
 // tools/probe_stream.py (~200 ms to the KTH server). Anything above it is ours.

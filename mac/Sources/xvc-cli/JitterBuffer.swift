@@ -36,7 +36,14 @@ final class JitterBuffer {
     // whole window is standing latency, not jitter headroom, so discard it. Discarding
     // mid-speech would click, so splice with a short cross-fade, and rate-limit so the
     // resulting time compression (~2%) is inaudible.
-    private let targetTroughFrames: Int
+    // The trough cannot be a constant. Measured against real speech, a fixed 40 ms trough
+    // trims to exactly 40 ms and parks there — but arrival jitter is ~28 ms (wire p50 231 /
+    // p95 259), so it underruns, re-primes, gets trimmed back down, and underruns again.
+    // So grow the target on every underrun: the buffer discovers the jitter it actually has
+    // to absorb. Standard adaptive-jitter-buffer behaviour, and it self-tunes per network.
+    private var targetTroughFrames: Int
+    private let troughGrowthFrames = 320     // +20 ms per underrun
+    private let troughCeilingFrames = 2560   // 160 ms; past this something else is wrong
     private var lowWater = Int.max
     private var framesSinceReview = 0
     private var framesSinceSplice = 0
@@ -54,12 +61,20 @@ final class JitterBuffer {
         return count
     }
 
+    /// The floor the buffer has settled on, in ms. Starts at the configured trough and
+    /// grows each time it underruns, so it converges on the jitter this path actually has.
+    var learnedTroughMs: Double {
+        lock.lock(); defer { lock.unlock() }
+        return Double(targetTroughFrames) / 16.0
+    }
+
     /// - Parameters:
     ///   - primeFrames: how much to buffer before playback starts. One server burst is
     ///     1920 frames (120 ms); 1.5 bursts absorbs one late burst without a gap.
     ///   - targetTroughFrames: the depth the buffer should fall to just before each burst
-    ///     lands. 320 frames = 20 ms of slack: enough that it never empties, nothing more.
-    init(capacityFrames: Int = 16000 * 2, primeFrames: Int = 2880, targetTroughFrames: Int = 320) {
+    ///     lands — a *starting guess only*. Every underrun raises it by 20 ms, so the
+    ///     buffer converges on however much jitter this network and server actually impose.
+    init(capacityFrames: Int = 16000 * 2, primeFrames: Int = 2880, targetTroughFrames: Int = 640) {
         self.storage = [Float](repeating: 0, count: capacityFrames)
         self.primeFrames = primeFrames
         self.targetTroughFrames = targetTroughFrames
@@ -118,6 +133,10 @@ final class JitterBuffer {
             underruns += 1
             primed = false
             pendingDrop = 0   // we just lost depth; do not also trim it away
+
+            // We ran dry, so the floor is higher than we believed. Raise it, or we will
+            // trim straight back down and underrun again on the next late burst.
+            targetTroughFrames = min(targetTroughFrames + troughGrowthFrames, troughCeilingFrames)
         }
     }
 
