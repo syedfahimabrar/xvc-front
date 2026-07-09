@@ -77,3 +77,67 @@ longer blocks anything.
 ## Dedicated box (Phase 3)
 
 _Not yet provisioned. Re-run the sweep after `setup.sh` to confirm the settings above hold._
+
+---
+
+# End-to-end over the wire
+
+`tools/probe_stream.py`, Mac → KTH server (RTX 3090, shared), 20 ms send chunks.
+
+## 2026-07-09 — 120 s continuous speech, KTH from campus network
+
+RTT to $XVC_HOST: **5.6 ms** avg (4.0 min / 9.8 max, 0% loss). `load-target` on an
+8 s WAV: 0.9 s.
+
+| Metric | Value |
+|---|---|
+| p50 latency | 198.8 ms |
+| p95 latency | 204.4 ms |
+| min / max | 179.8 / 524.9 ms |
+| drift (last third − first third) | **−1.2 ms** |
+| audio in → out | 120.0 s → 119.9 s |
+
+**Phase-1 gate passed on the network path** (p95 < 500 ms, drift flat). The p95−p50 gap
+is 6 ms: the server tracks real time rather than slowly falling behind, which is the
+failure mode `PERFORMANCE.md` §1 warns about. Note this measures the *wire*; the Swift
+client adds mic capture and jitter buffer on top.
+
+The budget closes arithmetically, which is the real reason to trust the number:
+120 ms look-ahead (see below) + 34 ms GPU + ~6 ms RTT ≈ 160 ms floor, and the observed
+minimum is 179.8 ms.
+
+**Latency is measured at each frame's last sample**, which waits only
+`smooth + future` = 120 ms of look-ahead. The frame's *first* sample waits the full
+240 ms. So perceived latency spans roughly [p50, p50 + 120] ms — call it 200–320 ms
+here, before the client's jitter buffer.
+
+**One outlier at 524.9 ms** in 976 frames (p95 is 204 ms, so this is a lone spike, most
+likely contention from the dialogue model sharing that GPU). A frame arriving ~320 ms
+late will underrun a 240 ms jitter buffer. Once per two minutes is survivable — emit
+silence and re-prime (`MAC_APP.md` §1) rather than growing the buffer for everyone.
+
+## Cold start is per-process, not per-session
+
+The **first ever** forward after the server process loads costs ~2.4 s (lazy CUDA/cuDNN
+init — the thing `bench.py`'s warm-ups exclude). First frame of that session: 2462 ms.
+
+A second WebSocket session against the same warm process showed **no cold start** (first
+frame 236 ms, in line with steady state). So this is not paid per connection, and the
+menu-bar toggle does not expose it.
+
+**Consequence for Phase 3:** the server must run one dummy forward at startup, before
+accepting connections. Otherwise the first user of a freshly started server hears ~2.4 s
+of mangled audio.
+
+## Does it actually sound like the target?
+
+Autocorrelation pitch, as an objective check (not a substitute for listening):
+
+| | f0 |
+|---|---|
+| source (`say -v Daniel`) | 112.7 Hz |
+| target (`say -v Samantha`) | 177.8 Hz |
+| **converted** | **170.2 Hz** |
+
+The output tracks the target speaker, not the source. Converted RMS 0.096, peak 0.68 —
+no silence, no clipping.

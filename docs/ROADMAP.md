@@ -26,6 +26,12 @@ quality risk). Ship `CHUNK_MS=2400`, `CURRENT_MS=120`, fp32. Full table and reas
 
 **Goal:** hear the converted voice live on the Mac and measure real mic-to-ear latency.
 
+The **wire path is already validated** by `tools/probe_stream.py` (a synthetic client
+that streams a WAV at real-time pace): p50 199 ms / p95 204 ms, drift −1.2 ms over 120 s
+against the KTH server, and the converted audio tracks the target speaker's pitch. So
+what remains is the Mac audio I/O, not the protocol. Use the probe as ground truth: if
+the Swift client is slower, the extra milliseconds are in capture or the jitter buffer.
+
 - Minimal Swift command-line tool (`mac/` — can be an SPM executable):
   mic capture → 16 kHz float32 → `wss://$XVC_HOST:5002/api/meanvc/stream` (existing
   KTH server; self-signed cert override; protocol per `docs/PROTOCOL.md`) → jitter
@@ -55,6 +61,10 @@ direct recording; device survives reboot.
 - `server/`: trimmed copy of `docs/reference/hearmeout-xvc-server.py` — keep
   `load-target` + `stream`, drop `chat-proxy`/sphn/PersonaPlex; add `XVC_AUTH_TOKEN`
   bearer auth (PROTOCOL.md §3).
+- **Warm the model at startup** with one dummy `run_stream_chunk_forward` before the
+  listener accepts connections. Measured: the first forward of a fresh process costs
+  ~2.4 s of lazy CUDA init, so without this the first user hears mangled audio. It is
+  per-process, not per-session (`docs/BENCHMARKS.md`).
 - `server/setup.sh` per BACKEND.md §7 (one command on fresh Ubuntu 22.04 + NVIDIA).
 - Provision the GPU box (region close to the user — RTT budget in PERFORMANCE.md §2),
   run setup, re-run Phase-0 benchmark there, apply tuning.

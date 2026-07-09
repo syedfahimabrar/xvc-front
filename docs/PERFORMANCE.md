@@ -40,9 +40,17 @@ VRAM is NOT the constraint: the full pipeline uses roughly 6–8 GB; a 3090 has 
 | Downlink network | ½ RTT | converted PCM back |
 | Jitter buffer + virtual-mic playout | 30–60 ms | output arrives in 120 ms bursts; buffer smooths it |
 
+The 240 ms look-ahead is the wait for a window's **first** sample; its **last** sample
+waits only `smooth + future` = 120 ms. Perceived latency therefore spans a 120 ms range
+across each emitted burst, rather than sitting at one value.
+
 Totals: with a nearby server (RTT ≤ 20 ms) and a healthy GPU, **~350–450 ms** —
 noticeable but fine for normal meeting turn-taking. RTT > ~150 ms (far cloud region)
 pushes past 600 ms and feels laggy: **pick a GPU region close to the user.**
+
+Measured 2026-07-09 over the wire, Mac → KTH, 5.6 ms RTT (`docs/BENCHMARKS.md`): p50
+198.8 ms / p95 204.4 ms at the frame's last sample, drift −1.2 ms over 120 s. Under
+budget, and flat.
 
 ## 3. Tuning levers, in order of bang-for-buck
 
