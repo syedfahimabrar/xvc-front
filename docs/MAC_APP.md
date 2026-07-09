@@ -84,6 +84,11 @@ A normal app cannot create a mic; macOS requires an **audio driver**. Solved pat
 - Ad-hoc signing (`CODE_SIGN_IDENTITY=-`) is enough for local installs: a HAL plug-in is
   user-space, so no Apple entitlement is involved. The stock project wants a "Mac
   Development" cert and fails without this.
+- **Re-sign after touching anything in the bundle.** Editing `Info.plist` (for the factory
+  UUID) breaks the signature xcodebuild applied, and `coreaudiod` then refuses to load the
+  plug-in **silently** — no log line, the device simply never appears. `codesign --verify`
+  reports `invalid Info.plist (plist or signature have been modified)`. Verify the signature
+  in the build, not at install time.
 - Install location: `/Library/Audio/Plug-Ins/HAL/XVCMic.driver` — requires **one-time
   admin authentication**, then restart CoreAudio (`sudo killall coreaudiod`; it
   respawns instantly). Every audio product (Krisp, Loopback, VB-Cable) has this step;

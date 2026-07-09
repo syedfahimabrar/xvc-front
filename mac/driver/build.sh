@@ -85,6 +85,11 @@ xcodebuild \
 PLIST="$DRIVER/Contents/Info.plist"
 sed -i '' "s/$BLACKHOLE_UUID/$FACTORY_UUID/g" "$PLIST"
 
+# Editing Info.plist breaks the signature xcodebuild just applied, and CoreAudio silently
+# refuses to load a plug-in whose seal is broken ("invalid Info.plist (plist or signature
+# have been modified)"). Re-sign after every modification to the bundle.
+codesign --force --sign - --timestamp=none "$DRIVER" 2>&1 | sed 's/^/  /'
+
 # Verify, don't assume. An earlier attempt built successfully and silently produced a device
 # named "XVC40Mic", because xcodebuild ate a backslash in a -D flag.
 echo
@@ -113,6 +118,14 @@ fi
 if printf '%s' "$SYMS" | grep -qE '^BlackHole( |$)'; then
     echo "  warn  binary still contains a bare 'BlackHole' string (icon/target name, harmless)"
 fi
+
+# The signature must be intact or coreaudiod ignores the bundle without a word.
+if codesign --verify --deep "$DRIVER" 2>/dev/null; then
+    echo "  ok    code signature: valid"
+else
+    echo "  FAIL  code signature: $(codesign --verify "$DRIVER" 2>&1 | head -1)"; fail=1
+fi
+
 [ $fail -eq 0 ] || { echo; echo "error: rebrand incomplete — do NOT install this" >&2; exit 1; }
 
 echo
