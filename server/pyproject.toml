@@ -1,0 +1,52 @@
+[project]
+name = "xvc-live-mic-server"
+version = "0.1.0"
+description = "X-VC streaming voice-conversion server + Phase-0 benchmark"
+# Pins are taken verbatim from docs/BACKEND.md §3 (proven against the pinned X-VC
+# commit). The benchmark shares this env with the server on purpose: measuring on a
+# different torch than we ship would make the numbers meaningless.
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    # From X-VC requirements.txt (pinned).
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "torchaudio==2.5.1",
+    "transformers==4.44.1",
+    "deepspeed==0.14.4",
+    "einops==0.8.0",
+    "einx==0.3.0",
+    "x-transformers==1.40.2",
+    "hydra-core==1.3.2",
+    "julius==0.2.7",
+    "librosa==0.10.2",
+    "matplotlib==3.7.5",
+    "numpy==1.26.4",
+    "omegaconf==2.3.0",
+    "scipy==1.12.0",
+    "soundfile==0.12.1",
+    "soxr==0.3.7",
+    "tqdm==4.66.5",
+    "wandb==0.18.5",
+    "torchmetrics==1.8.0",
+    "torchcrepe==0.0.23",
+    "ema-pytorch==0.7.7",
+    "packaging==24.2",
+    "lightning==2.2.4",
+    "gdown==5.1.0",
+    "tensorboard==2.20.0",
+    "descript-audiotools==0.7.2",
+    # Server deps.
+    "aiohttp>=3.10",
+    "huggingface-hub",
+    "modelscope",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu121" }
+torchvision = { index = "pytorch-cu121" }
+torchaudio = { index = "pytorch-cu121" }

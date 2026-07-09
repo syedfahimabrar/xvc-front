@@ -65,6 +65,9 @@ user's normal network.
 
 - Menu-bar UI per MAC_APP.md §3 (target picker, toggle, latency readout, failure
   behaviors §4).
+- One-click Convert toggle in the system status bar (MAC_APP.md §3.1): left click
+  toggles, right click opens the menu, plus a global hotkey for full-screen meetings.
+  Cross-faded, no engine restart, passthrough covers the ON pipeline-fill delay.
 - Single `.pkg` installer: app + XVC Mic driver + postinstall (coreaudiod bounce).
 - Signing + notarization for distribution beyond the team.
 

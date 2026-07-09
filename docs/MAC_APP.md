@@ -77,6 +77,41 @@ audio rendered to its output is readable at its input. No extra glue needed.
   depth + RTT ping), connection state.
 - Menu-bar icon states: idle / connecting / converting / error.
 
+### 3.1 Immediate toggle in the status bar
+
+The toggle sits in the system status bar (the strip where the Wi-Fi and battery icons
+live) as an `NSStatusItem`, and must flip conversion on/off **in one click, mid-call,
+without opening a menu** — the user is speaking when they reach for it.
+
+- **Click behavior**: `statusItem.button` with
+  `sendAction(on: [.leftMouseUp, .rightMouseUp])`. Left click toggles Convert directly;
+  right click (and click-and-hold) opens the menu with the target picker, server
+  settings, and quit. Never put the toggle behind the menu — that is two clicks and a
+  read.
+- **Global hotkey** for toggling without leaving the meeting window. The status bar is
+  covered by full-screen apps on some setups, so the hotkey is the real path, not a
+  nicety. (Zoom is often full-screen; that is exactly when you need this.)
+- **Icon states** as SF Symbol *template* images so they track the light/dark menu bar:
+  idle (`mic.slash`), connecting (`mic.badge.ellipsis`, animated), converting (filled +
+  accent tint), error (`exclamationmark.triangle`). The converting state must be
+  distinguishable at a glance and in peripheral vision — this icon is the only feedback
+  that the far end is hearing the converted voice rather than the real one.
+- **Toggling must not tear down the audio engines.** Both are already running (§1); the
+  toggle only chooses which source feeds the playout node into XVC Mic. Rebuilding an
+  engine mid-call drops audio for hundreds of milliseconds and Zoom may see the device
+  disappear.
+- **Cross-fade the switch** (~20 ms raised cosine, same shape as the server's window
+  smoothing) — a hard cut between the real and converted voice is an audible click.
+- **Turning Convert ON has a pipeline-fill delay** of roughly one end-to-end latency
+  (~350–450 ms, PERFORMANCE.md §2) before the first converted samples arrive. Keep
+  passthrough audio flowing during the fill and cross-fade when the first converted
+  buffer lands, so the toggle never produces a gap. Show the connecting icon during it.
+  Turning OFF is immediate (passthrough is always live).
+- Consequence for §1: the playout node's source has to be switchable at buffer
+  granularity. Design it that way when Phase 2 wires playout into the virtual mic —
+  the UI arrives later, but a playout node that can only be re-pointed by restarting
+  the engine cannot support this toggle.
+
 ## 4. Failure behaviors (decide up front, they define perceived quality)
 
 | Event | Behavior |
