@@ -17,6 +17,8 @@ struct Options {
     var troughMs = 80.0   // a starting guess; the buffer grows it on each underrun
     var deviceBufferFrames: Int?
     var mute = false
+    var outputDevice: String?
+    var listDevices = false
 }
 
 func parseArguments() -> Options {
@@ -44,6 +46,8 @@ func parseArguments() -> Options {
           --trough-ms <n>       starting buffer trough, default 80 (grows on underrun)
           --device-buffer <n>   ask the mic for an N-frame IO buffer (system-wide; rarely needed)
           --mute                measure latency without playing audio (no headphones needed)
+          --output-device <name>  render into this device instead of the speakers, e.g. "XVC Mic"
+          --list-devices        print the audio devices this Mac has, and exit
 
         Wear headphones. Grant Terminal microphone access in System Settings.
         """)
@@ -59,7 +63,9 @@ func parseArguments() -> Options {
     if let v = value("--trough-ms"), let m = Double(v) { options.troughMs = m }
     if let v = value("--device-buffer"), let f = Int(v) { options.deviceBufferFrames = f }
     options.insecure = args.contains("--insecure")
+    if let v = value("--output-device") { options.outputDevice = v }
     options.mute = args.contains("--mute")
+    options.listDevices = args.contains("--list-devices")
     return options
 }
 
@@ -69,6 +75,17 @@ func fail(_ message: String) -> Never {
 }
 
 let options = parseArguments()
+
+if options.listDevices {
+    for d in AudioDevices.all() {
+        let kind = [d.inputChannels > 0 ? "in:\(d.inputChannels)" : nil,
+                    d.outputChannels > 0 ? "out:\(d.outputChannels)" : nil]
+            .compactMap { $0 }.joined(separator: " ")
+        print("  \(d.name.padding(toLength: max(28, d.name.count), withPad: " ", startingAt: 0)) \(kind)")
+    }
+    exit(0)
+}
+
 guard !options.host.isEmpty else {
     fail("no server host: pass --host or set XVC_HOST")
 }
@@ -123,7 +140,19 @@ final class StopSignal: @unchecked Sendable {
 
 let jitter = JitterBuffer(primeFrames: Int(options.primeMs / 1000.0 * 16000),
                           targetTroughFrames: Int(options.troughMs / 1000.0 * 16000))
-let audio = AudioIO(jitter: jitter, deviceBufferFrames: options.deviceBufferFrames, mute: options.mute)
+var outputDevice: AudioDevices.Device?
+if let wanted = options.outputDevice {
+    guard let found = AudioDevices.findOutput(named: wanted) else {
+        fail("no output device named \"\(wanted)\". Run --list-devices to see what exists.")
+    }
+    outputDevice = found
+    print("[xvc] rendering into \"\(found.name)\" (uid \(found.uid), \(found.outputChannels)ch out / \(found.inputChannels)ch in)")
+}
+
+let audio = AudioIO(jitter: jitter,
+                    deviceBufferFrames: options.deviceBufferFrames,
+                    mute: options.mute,
+                    outputDevice: outputDevice)
 let tracker = LatencyTracker()
 let stopSignal = StopSignal()
 

@@ -5,8 +5,8 @@ The Mac side. No ML here — it only moves audio.
 | Target | Phase | What it is |
 |---|---|---|
 | `xvc-cli` | 1 | headless latency prototype: mic → server → **headphones** |
+| `driver/` | 2 | build script for the "XVC Mic" virtual device (rebranded BlackHole) |
 | `XVCLiveMic` | 4 | SwiftUI menu-bar app — not written yet |
-| `XVCMicDriver` | 2 | BlackHole fork, the "XVC Mic" virtual device — not written yet |
 
 ## Running the Phase-1 prototype
 
@@ -58,6 +58,33 @@ See `docs/BENCHMARKS.md`.
 the excess would otherwise be permanent latency. `JitterBuffer` watches the low-water mark
 and splices out unused depth with a cross-fade.
 
+## The XVC Mic virtual device (Phase 2)
+
+```bash
+cd driver
+./build.sh              # clones BlackHole at a pinned tag, rebrands, verifies
+./build.sh install      # copies to /Library/Audio/Plug-Ins/HAL, restarts coreaudiod
+./build.sh uninstall
+```
+
+Installing needs your password and briefly interrupts all audio on the machine — a HAL
+plug-in lives in a root-owned directory and CoreAudio only rescans on restart. Every audio
+product does this (Krisp, Loopback, VB-Cable).
+
+Then render the converted voice into it instead of the speakers:
+
+```bash
+.build/debug/xvc-cli --target-wav t.wav --insecure --output-device "XVC Mic"
+xvc-cli --list-devices     # see what this Mac has
+```
+
+Whatever is rendered to the device's output side appears at its input side, so Zoom, Meet
+and Teams see "XVC Mic" as an ordinary microphone.
+
+`build.sh` verifies the rebrand by inspecting the built binary, because a mis-quoted build
+flag produces a working driver with the *wrong device name* and no error. See
+`docs/MAC_APP.md` §2.
+
 ## Layout
 
 ```
@@ -67,4 +94,8 @@ Sources/xvc-cli/
   JitterBuffer.swift   # ring buffer, priming, adaptive shrink
   XVCClient.swift      # load-target upload, WebSocket, TLS override
   LatencyTracker.swift # sample-count bookkeeping (PERFORMANCE.md §5)
+  AudioDevices.swift   # enumerate/select CoreAudio devices by name
+driver/
+  build.sh             # clone + rebrand + verify + install the virtual device
+  xvcmic_names.h       # the rebrand constants, injected with clang -include
 ```

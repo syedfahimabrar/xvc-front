@@ -26,6 +26,7 @@ final class AudioIO {
 
     private let deviceBufferFrames: Int?
     private let mute: Bool
+    private let outputDevice: AudioDevices.Device?
 
     /// - Parameter deviceBufferFrames: optionally ask the input device for a smaller IO
     ///   buffer. Capture granularity comes from the device (typically 512 frames = 10.7 ms),
@@ -35,13 +36,24 @@ final class AudioIO {
     ///   pulls the jitter buffer on the same schedule, so timing is unchanged — it just
     ///   lets you measure latency on speakers without the mic hearing the output and
     ///   feeding the server its own voice.
-    init(jitter: JitterBuffer, deviceBufferFrames: Int? = nil, mute: Bool = false) {
+    /// - Parameter outputDevice: where to render the converted voice. nil = default output
+    ///   (headphones, Phase 1). Pass the "XVC Mic" virtual device for Phase 2: whatever we
+    ///   render to its output side appears at its input side, which meeting apps read.
+    init(jitter: JitterBuffer,
+         deviceBufferFrames: Int? = nil,
+         mute: Bool = false,
+         outputDevice: AudioDevices.Device? = nil) {
         self.jitter = jitter
         self.deviceBufferFrames = deviceBufferFrames
         self.mute = mute
+        self.outputDevice = outputDevice
     }
 
     func start() throws {
+        // Must happen before the engine starts: CoreAudio will not re-point a running
+        // output unit. Touching outputNode here also instantiates it.
+        if let outputDevice { try AudioDevices.setOutputDevice(engine, to: outputDevice) }
+
         let input = engine.inputNode
 
         if let frames = deviceBufferFrames { setDefaultInputBufferFrames(UInt32(frames)) }

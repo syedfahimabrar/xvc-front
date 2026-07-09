@@ -50,9 +50,14 @@ the Swift client is slower, the extra milliseconds are in capture or the jitter 
 **Exit gate:** p95 < 500 ms over 2 minutes of continuous speech, no growing drift.
 If this fails, fix server tuning/placement — do NOT proceed to Phase 2.
 
-## Phase 2 — Virtual microphone
+## Phase 2 — Virtual microphone — driver builds, not yet installed
 
 **Goal:** the converted voice appears as a selectable mic in a real meeting.
+
+**Status:** `mac/driver/build.sh` clones BlackHole at v0.7.1, rebrands it to "XVC Mic" via a
+prefix header, gives it its own factory UUID, ad-hoc signs it, and verifies the result by
+inspecting the binary. `xvc-cli --output-device "XVC Mic"` renders into it.
+**Remaining:** `./build.sh install` (needs admin), then a real Zoom/Meet call.
 
 - Fork BlackHole → rebrand "XVC Mic" (MAC_APP.md §2), build + codesign, install to
   `/Library/Audio/Plug-Ins/HAL/`, bounce coreaudiod.

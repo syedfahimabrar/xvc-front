@@ -66,9 +66,24 @@ A normal app cannot create a mic; macOS requires an **audio driver**. Solved pat
 - Fork **BlackHole** (github.com/ExistentialAudio/BlackHole, **MIT license** — keep the
   license file and attribution). It is a user-space **AudioServerPlugIn** (HAL plug-in),
   NOT a kernel extension — no special Apple entitlement needed, just normal signing.
-- Rebrand: device name "XVC Mic", new bundle ID, new device UID (constants at the top
-  of `BlackHole.h` — name, UID, bundle ID, icon). 2-channel, 48 kHz is fine (also build
-  16 kHz? No — meeting apps expect 44.1/48 kHz; resample in the app).
+- Rebrand: device name "XVC Mic", new bundle ID, new device UID. Every constant is
+  `#ifndef`-guarded in `BlackHole.c`, so **inject a prefix header with clang's `-include`**
+  (`mac/driver/xvcmic_names.h`) rather than vendoring or patching their source — upstream
+  then rebases for free. 2-channel, 44.1/48 kHz (meeting apps expect a normal-looking
+  device; the app resamples 16 kHz up before rendering into it).
+- **Do not use `GCC_PREPROCESSOR_DEFINITIONS` for the device name**, as BlackHole's README
+  suggests. The name contains a space, and `-DkDevice_Name="XVC Mic"` is split on it before
+  clang sees it. Escaping does not help — xcodebuild strips the backslash, so `"XVC\40Mic"`
+  arrives as the literal `XVC40Mic`: **it builds successfully and silently ships a device
+  named "XVC40Mic"**. Always `strings` the built binary and assert the name is right; a
+  green build proves nothing here.
+- **Give the plug-in its own factory UUID.** It is identified by the UUID in its
+  `Info.plist`, and BlackHole ships a fixed one — a rebranded copy that keeps it collides
+  with a real BlackHole install. Use a *stable* UUID (not freshly generated per build, or
+  every rebuild leaves a phantom device behind in CoreAudio).
+- Ad-hoc signing (`CODE_SIGN_IDENTITY=-`) is enough for local installs: a HAL plug-in is
+  user-space, so no Apple entitlement is involved. The stock project wants a "Mac
+  Development" cert and fails without this.
 - Install location: `/Library/Audio/Plug-Ins/HAL/XVCMic.driver` — requires **one-time
   admin authentication**, then restart CoreAudio (`sudo killall coreaudiod`; it
   respawns instantly). Every audio product (Krisp, Loopback, VB-Cable) has this step;
