@@ -54,10 +54,12 @@ If this fails, fix server tuning/placement — do NOT proceed to Phase 2.
 
 **Goal:** the converted voice appears as a selectable mic in a real meeting.
 
-**Status:** `mac/driver/build.sh` clones BlackHole at v0.7.1, rebrands it to "XVC Mic" via a
-prefix header, gives it its own factory UUID, ad-hoc signs it, and verifies the result by
-inspecting the binary. `xvc-cli --output-device "XVC Mic"` renders into it.
-**Remaining:** `./build.sh install` (needs admin), then a real Zoom/Meet call.
+**Status:** driver builds, installs, and loads. The loopback is **verified**: a separate
+process reading XVC Mic's input side sees peak 0.70 while `xvc-cli --output-device "XVC Mic"`
+renders into its output side. Google Meet lists the device.
+**Remaining:** a real call where the far end confirms it hears the converted voice, and
+WhatsApp (which does not list the device — try a full restart first; it likely caches the
+device list at launch).
 
 - Fork BlackHole → rebrand "XVC Mic" (MAC_APP.md §2), build + codesign, install to
   `/Library/Audio/Plug-Ins/HAL/`, bounce coreaudiod.

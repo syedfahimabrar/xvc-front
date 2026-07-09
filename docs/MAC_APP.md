@@ -167,7 +167,9 @@ without opening a menu** — the user is speaking when they reach for it.
 |---|---|
 | WebSocket drops mid-call | auto-reconnect with backoff; play silence into XVC Mic meanwhile (meeting app sees a quiet mic, not a dead device); re-upload target if needed |
 | Server can't keep up (rising buffer/latency) | surface it in the UI ("server overloaded"); optional auto-fallback to passthrough |
-| Laptop sleeps / device changes | rebuild both engines on `AVAudioEngineConfigurationChange` |
+| Laptop sleeps / device changes | rebuild both engines on `AVAudioEngineConfigurationChange`. **This fires when a meeting app selects "XVC Mic" as its microphone** (that changes the system default input). AVAudioEngine responds by *stopping*: the jitter buffer freezes, we stop sending, and the far end hears silence with nothing printed. Observed exactly this on the first real call. |
+| A meeting app takes XVC Mic as its mic | **Pin capture to a real device at startup.** An engine that follows the system default input will start capturing our own converted output the moment a call selects XVC Mic. |
+| Re-pointing a device | Read the node's format *after* the switch, and use `inputFormat(forBus:)`, not `outputFormat(forBus:)` — the latter goes stale and `connect` throws "Input HW format and tap format not matching", crashing at startup. |
 | No mic permission | clear one-click guidance to System Settings |
 
 ## 5. Project layout suggestion

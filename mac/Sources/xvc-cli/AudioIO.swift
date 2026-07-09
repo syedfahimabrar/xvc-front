@@ -27,6 +27,11 @@ final class AudioIO {
     private let deviceBufferFrames: Int?
     private let mute: Bool
     private let outputDevice: AudioDevices.Device?
+    private let inputDevice: AudioDevices.Device?
+
+    /// Fired when CoreAudio reconfigured underneath us and we rebuilt. Callers re-prime.
+    var onReconfigured: ((String) -> Void)?
+    private var observers: [NSObjectProtocol] = []
 
     /// Seconds of audio between the socket and the ear: what's queued in the jitter buffer
     /// plus what the output hardware holds. Used to turn "arrived" into "heard".
@@ -47,11 +52,13 @@ final class AudioIO {
     init(jitter: JitterBuffer,
          deviceBufferFrames: Int? = nil,
          mute: Bool = false,
-         outputDevice: AudioDevices.Device? = nil) {
+         outputDevice: AudioDevices.Device? = nil,
+         inputDevice: AudioDevices.Device? = nil) {
         self.jitter = jitter
         self.deviceBufferFrames = deviceBufferFrames
         self.mute = mute
         self.outputDevice = outputDevice
+        self.inputDevice = inputDevice
     }
 
     /// What the engines actually ended up bound to. Always report these: the loopback bug
@@ -66,11 +73,51 @@ final class AudioIO {
     func start() throws {
         try startPlayout()
         try startCapture()
+        observeConfigurationChanges()
     }
 
     func stop() {
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers = []
         captureEngine.stop()
         playoutEngine.stop()
+    }
+
+    // MARK: - surviving device changes
+    //
+    // CoreAudio reconfigures when a device is added, removed, or seized -- and crucially when
+    // a meeting app selects "XVC Mic" as its microphone, which changes the system default
+    // input. AVAudioEngine responds by STOPPING. Without this, both engines die mid-call: the
+    // jitter buffer freezes, we stop sending, and the far end hears silence with no error
+    // printed anywhere. docs/MAC_APP.md §4.
+    private func observeConfigurationChanges() {
+        for engine in [captureEngine, playoutEngine] {
+            let token = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange,
+                object: engine,
+                queue: .main
+            ) { [weak self] _ in
+                self?.rebuild(reason: engine === self?.captureEngine ? "capture" : "playout")
+            }
+            observers.append(token)
+        }
+    }
+
+    private func rebuild(reason: String) {
+        captureEngine.stop()
+        playoutEngine.stop()
+        if let sourceNode { playoutEngine.detach(sourceNode) }
+        if let sinkNode { captureEngine.detach(sinkNode) }
+        sourceNode = nil
+        sinkNode = nil
+        jitter.reset()
+        do {
+            try startPlayout()
+            try startCapture()
+            onReconfigured?("\(reason) engine reconfigured; rebuilt and re-primed")
+        } catch {
+            onReconfigured?("rebuild failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - playout (converted audio -> output device)
@@ -112,7 +159,16 @@ final class AudioIO {
         if let frames = deviceBufferFrames { setDefaultInputBufferFrames(UInt32(frames)) }
 
         let input = captureEngine.inputNode
-        let inputFormat = input.outputFormat(forBus: 0)
+        // Bind to a real microphone explicitly. Following the system default is unsafe: a
+        // meeting app that picks "XVC Mic" as its mic changes that default, and we would then
+        // capture our own converted output.
+        if let inputDevice {
+            try AudioDevices.setInputDevice(captureEngine, to: inputDevice)
+        }
+        // Read the format AFTER re-pointing the device, and read the node's *hardware* format.
+        // outputFormat(forBus:) goes stale across a device switch, and connecting with it
+        // throws "Input HW format and tap format not matching" — a hard crash at startup.
+        let inputFormat = input.inputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0 else {
             throw XVCError("no input device (or microphone permission denied)")
         }

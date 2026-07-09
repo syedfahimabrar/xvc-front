@@ -18,6 +18,7 @@ struct Options {
     var deviceBufferFrames: Int?
     var mute = false
     var outputDevice: String?
+    var inputDevice: String?
     var listDevices = false
 }
 
@@ -47,6 +48,7 @@ func parseArguments() -> Options {
           --device-buffer <n>   ask the mic for an N-frame IO buffer (system-wide; rarely needed)
           --mute                measure latency without playing audio (no headphones needed)
           --output-device <name>  render into this device instead of the speakers, e.g. "XVC Mic"
+          --input-device <name>   capture from this mic (default: the system default input)
           --list-devices        print the audio devices this Mac has, and exit
 
         Wear headphones. Grant Terminal microphone access in System Settings.
@@ -64,6 +66,7 @@ func parseArguments() -> Options {
     if let v = value("--device-buffer"), let f = Int(v) { options.deviceBufferFrames = f }
     options.insecure = args.contains("--insecure")
     if let v = value("--output-device") { options.outputDevice = v }
+    if let v = value("--input-device") { options.inputDevice = v }
     options.mute = args.contains("--mute")
     options.listDevices = args.contains("--list-devices")
     return options
@@ -149,10 +152,31 @@ if let wanted = options.outputDevice {
     print("[xvc] rendering into \"\(found.name)\" (uid \(found.uid), \(found.outputChannels)ch out / \(found.inputChannels)ch in)")
 }
 
+// Resolve the mic ONCE, up front, and pin the engine to it. If a meeting app later selects
+// "XVC Mic" as its microphone, macOS changes the default input — we must not follow.
+var inputDevice: AudioDevices.Device?
+if let wanted = options.inputDevice {
+    guard let found = AudioDevices.findInput(named: wanted) else {
+        fail("no input device named \"\(wanted)\". Run --list-devices to see what exists.")
+    }
+    inputDevice = found
+} else {
+    inputDevice = AudioDevices.defaultInput()
+}
+if let inputDevice, let outputDevice, inputDevice.id == outputDevice.id {
+    fail("input and output are both \"\(inputDevice.name)\" — the mic would hear its own output")
+}
+if let inputDevice { print("[xvc] capturing from \"\(inputDevice.name)\" (pinned)") }
+
 let audio = AudioIO(jitter: jitter,
                     deviceBufferFrames: options.deviceBufferFrames,
                     mute: options.mute,
-                    outputDevice: outputDevice)
+                    outputDevice: outputDevice,
+                    inputDevice: inputDevice)
+
+audio.onReconfigured = { message in
+    print("[xvc] \(message)")
+}
 let tracker = LatencyTracker()
 let stopSignal = StopSignal()
 
@@ -191,7 +215,7 @@ print(String(format: "[xvc] out \"%@\" | hw latency %.1f ms | prime %.0f ms",
              audio.outputDeviceName,
              audio.playoutEngine.outputNode.presentationLatency * 1000, options.primeMs))
 if audio.inputDeviceName == audio.outputDeviceName {
-    fail("input and output are both \"\(audio.inputDeviceName)\" — the mic would hear its own output")
+    fail("input and output both bound to \"\(audio.inputDeviceName)\" — the mic would hear its own output")
 }
 print("[xvc] speak now — rolling latency every 2 s (Ctrl-C to stop early)\n")
 

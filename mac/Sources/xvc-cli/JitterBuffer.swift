@@ -80,6 +80,18 @@ final class JitterBuffer {
         self.targetTroughFrames = targetTroughFrames
     }
 
+    /// Drop everything and re-prime. Used after an audio device reconfiguration, where the
+    /// buffered audio is stale and the engines have restarted from scratch.
+    func reset() {
+        lock.lock(); defer { lock.unlock() }
+        readIndex = 0
+        count = 0
+        primed = false
+        pendingDrop = 0
+        lowWater = Int.max
+        framesSinceReview = 0
+    }
+
     func write(_ pcm: [Float]) {
         lock.lock(); defer { lock.unlock() }
         let capacity = storage.count

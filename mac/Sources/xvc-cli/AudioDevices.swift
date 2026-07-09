@@ -48,6 +48,47 @@ enum AudioDevices {
         return prefix.count == 1 ? prefix[0] : nil
     }
 
+    /// Case-insensitive exact match among devices that can capture.
+    static func findInput(named name: String) -> Device? {
+        let inputs = all().filter { $0.inputChannels > 0 }
+        if let exact = inputs.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            return exact
+        }
+        let prefix = inputs.filter { $0.name.lowercased().hasPrefix(name.lowercased()) }
+        return prefix.count == 1 ? prefix[0] : nil
+    }
+
+    static func defaultInput() -> Device? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var id = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                         &address, 0, nil, &size, &id) == noErr else { return nil }
+        return all().first { $0.id == id }
+    }
+
+    /// Bind an engine's capture to a specific device. Necessary, not cosmetic: a meeting app
+    /// that selects "XVC Mic" as its microphone changes the *system default input*, and an
+    /// engine following the default would then capture our own converted output.
+    static func setInputDevice(_ engine: AVAudioEngine, to device: Device) throws {
+        guard let unit = engine.inputNode.audioUnit else {
+            throw XVCError("input node has no audio unit")
+        }
+        var id = device.id
+        let status = AudioUnitSetProperty(unit,
+                                          kAudioOutputUnitProperty_CurrentDevice,
+                                          kAudioUnitScope_Global,
+                                          0,
+                                          &id,
+                                          UInt32(MemoryLayout<AudioDeviceID>.size))
+        guard status == noErr else {
+            throw XVCError("could not select input device \"\(device.name)\" (OSStatus \(status))")
+        }
+    }
+
     /// Point an AVAudioEngine's output at a specific device. Must be called before the
     /// engine starts — CoreAudio will not switch a running output unit.
     /// NOTE: on macOS an engine's input and output share one I/O unit, so this re-points
