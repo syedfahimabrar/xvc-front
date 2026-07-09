@@ -22,9 +22,17 @@ quality risk). Ship `CHUNK_MS=2400`, `CURRENT_MS=120`, fp32. Full table and reas
 
 **Exit gate:** p95 per-window < 100 ms on the chosen GPU + settings.
 
-## Phase 1 — CLI latency prototype (no driver, no UI)
+## Phase 1 — CLI latency prototype (no driver, no UI) — built, awaiting speech test
 
 **Goal:** hear the converted voice live on the Mac and measure real mic-to-ear latency.
+
+**Status:** `mac/xvc-cli` is built and passes the gate against the KTH server:
+p50 381.9 ms / p95 390.6 ms, drift +1.1 ms over 60 s. Two client bugs found and fixed on
+the way (`installTap` ignoring its buffer size; the jitter buffer never draining its prime
+overshoot) — both are written up in `docs/BENCHMARKS.md` and `docs/MAC_APP.md` §1.
+**Remaining:** run the full 2 minutes with continuous *speech* on headphones and confirm
+the converted voice sounds right live. The runs so far measured a silent mic, which
+exercises the same timing path but says nothing about audio quality.
 
 The **wire path is already validated** by `tools/probe_stream.py` (a synthetic client
 that streams a WAV at real-time pace): p50 199 ms / p95 204 ms, drift −1.2 ms over 120 s

@@ -17,11 +17,18 @@ WebSocket receive (converted float32 @ 16 kHz, arrives in ~120 ms bursts)
 ```
 
 Implementation notes:
-- **Capture:** `AVAudioEngine.inputNode.installTap` with a small buffer (e.g. 1024
-  frames @ 48 kHz ≈ 21 ms). Request mic permission (TCC) — add
-  `NSMicrophoneUsageDescription`; a menu-bar app still gets the standard prompt.
-- **Send cadence:** forward each tap buffer immediately after resampling (~20 ms
-  chunks). The server accepts any chunk length; smaller chunks shave latency.
+- **Capture: use `AVAudioSinkNode`, NOT `installTap`.** `installTap`'s `bufferSize` is
+  advisory and macOS ignores it: measured on macOS 15 it delivered **4800-frame (100 ms)**
+  buffers whether we asked for 256, 512, 1024 or 2048, while the device itself was running
+  512-frame (10.7 ms) buffers. Audio that only materialises every 100 ms cannot be sent
+  sooner, so the server received input in clumps, completed windows in clumps, and returned
+  a ~100 ms latency tail that no client-side buffering can remove. `AVAudioSinkNode` hands
+  you the device's own granularity. Switching cost us nothing and removed the tail entirely
+  (`docs/BENCHMARKS.md`). Request mic permission (TCC) — add `NSMicrophoneUsageDescription`;
+  a menu-bar app still gets the standard prompt.
+- **Send cadence:** forward each captured buffer immediately after resampling (~11 ms
+  chunks). The server accepts any chunk length; smaller chunks shave latency. Chunk *size*
+  turned out not to matter; chunk *regularity* mattered enormously.
 - **WebSocket:** `URLSessionWebSocketTask`. First message from server is JSON — wait
   for `{"status":"ready"}` before streaming (PROTOCOL.md). For the dev/KTH server the
   cert is self-signed: implement `urlSession(_:didReceive:completionHandler:)` trust
@@ -29,6 +36,14 @@ Implementation notes:
 - **Jitter buffer:** output arrives in bursts (server emits `CURRENT_MS` at a time).
   Prime playback after ~1.5 bursts of audio are buffered; on underrun emit silence and
   re-prime rather than glitching. Track buffer depth to display live latency.
+- **The buffer must shrink itself.** Priming overshoots — you wait for 2880 frames but
+  audio arrives in indivisible 1920-frame bursts, so playback starts holding ~3840. Input
+  and output both run at 16 kHz, so nothing ever drains that excess: it becomes permanent
+  latency whose size is decided by luck. Measured, p50 wandered 417–511 ms across runs with
+  identical settings. Fix: watch the buffer's low-water mark over a ~0.5 s window, and drop
+  depth that never gets used, splicing with a ~4 ms cross-fade so it doesn't click. Converge
+  on a trough of **40 ms** — below that it underruns, above it you are just paying latency
+  (measured floor; see `docs/BENCHMARKS.md`).
 - **Playout into the virtual mic:** the virtual device is an output like any other —
   create a second `AVAudioEngine` (or `AudioUnit`) whose output device is set to the
   "XVC Mic" device UID (`kAudioOutputUnitProperty_CurrentDevice` /

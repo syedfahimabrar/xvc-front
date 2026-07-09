@@ -129,6 +129,65 @@ menu-bar toggle does not expose it.
 accepting connections. Otherwise the first user of a freshly started server hears ~2.4 s
 of mangled audio.
 
+---
+
+# Swift client — mic to ear (`mac/xvc-cli`)
+
+2026-07-09, MacBook mic (48 kHz, 512-frame device buffer) → KTH server → headphones.
+Runs below used a silent mic; latency accounting is independent of what is spoken.
+
+| Setting | p50 | p95 | drift / 60 s | underruns |
+|---|---|---|---|---|
+| **defaults** (prime 180 ms, trough 40 ms) | **381.9 ms** | **390.6 ms** | +1.1 ms | 1 |
+
+Gate is p95 < 500 ms. The budget closes: 226 ms wire + 160 ms buffer (one 120 ms burst +
+40 ms trough) + 1.5 ms output hardware ≈ 388 ms.
+
+## The two client-side bugs worth remembering
+
+**`installTap` ignores its `bufferSize`.** Measured, it delivered 4800-frame (100 ms)
+buffers whether we asked for 256, 512, 1024 or 2048 — while the device was running
+512-frame buffers. The server then received input in clumps, completed windows in clumps,
+and returned a ~100 ms latency tail. Visible as wire p95 307 ms against the probe's 204 ms
+on the same path in the same minute, with p50 identical (207 vs 209). Chunk *size* never
+mattered; chunk *regularity* did. Switching to `AVAudioSinkNode` gave device granularity
+(512 frames, 10.7 ms) and collapsed the wire spread from 100 ms to 6 ms.
+
+| capture | wire p50 | wire p95 | spread |
+|---|---|---|---|
+| `installTap` | 207.6 ms | 307.7 ms | 100 ms |
+| `AVAudioSinkNode` | 226.1 ms | 244.4 ms | 18 ms |
+| `probe_stream.py` (reference) | 208.8 ms | 213.2 ms | 4 ms |
+
+**Jitter buffer depth is decided by luck unless it shrinks.** Priming waits for 2880
+frames, but bursts are indivisible 1920-frame lumps, so playback begins holding ~3840
+(240 ms). Nothing drains it — both ends run at 16 kHz — so it is permanent latency. p50
+wandered 417–511 ms across identical runs. With adaptive shrink (drop unused depth, splice
+with a 4 ms cross-fade) the buffer converges to a set trough:
+
+| trough | p50 | p95 | underruns / 18 s |
+|---|---|---|---|
+| 20 ms | 368.9 ms | 476.8 ms | 9 |
+| **40 ms** | **380.2 ms** | **387.8 ms** | **0** |
+| 60 ms | 406.0 ms | 411.7 ms | 0 |
+
+40 ms is the floor. Below it the buffer empties between bursts; above it you pay latency
+for nothing.
+
+## Where the remaining latency lives
+
+Of 382 ms, roughly 120 ms is algorithmic look-ahead, 34 ms is GPU, ~6 ms is network, and
+160 ms is the jitter buffer — of which **120 ms is one server burst**. The buffer cannot go
+below one burst, because that is the granularity output arrives in.
+
+So the next real lever is **`CURRENT_MS` on the server**, and it points *down*, not up.
+`PERFORMANCE.md` §3 only considers raising it (120 → 240) to cut GPU load. But Phase 0
+measured a 0.28x load fraction: dropping `CURRENT_MS` to 60 would put load at ~0.57x —
+still inside "comfortable" — while halving both the look-ahead *and* the burst the client
+must buffer. Estimated saving ~120 ms end to end. Untested (the KTH server's config is
+fixed and shared); test it on the dedicated box in Phase 3, and listen, since it changes
+the cross-fade cadence.
+
 ## Does it actually sound like the target?
 
 Autocorrelation pitch, as an objective check (not a substitute for listening). Two runs,

@@ -11,3 +11,6 @@ bench.json
 
 .agent/
 PROJECT.md
+
+# Swift build products
+.build/
