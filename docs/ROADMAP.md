@@ -54,12 +54,16 @@ If this fails, fix server tuning/placement — do NOT proceed to Phase 2.
 
 **Goal:** the converted voice appears as a selectable mic in a real meeting.
 
-**Status:** driver builds, installs, and loads. The loopback is **verified**: a separate
-process reading XVC Mic's input side sees peak 0.70 while `xvc-cli --output-device "XVC Mic"`
-renders into its output side. Google Meet lists the device.
-**Remaining:** a real call where the far end confirms it hears the converted voice, and
-WhatsApp (which does not list the device — try a full restart first; it likely caches the
-device list at launch).
+**Status: exit gate met in Google Meet** — far end hears the converted voice in a real
+call (user-confirmed, 2026-07-11), after fixing a chain of silent client failures: the
+engine-sharing input hijack, the rebuild feedback loop, the reused-engine dead mic, the
+rebuild-everything stream break, and the missing-notification case (now covered by a
+capture watchdog on the input signal itself). See MAC_APP.md §1/§4 and git history.
+**FaceTime does not work and will not without driver surgery**: Apple's voice-processing
+unit hard-mutes virtual-mic input (measured: exact zeros with no echo reference in play —
+MAC_APP.md §2). Same family as WhatsApp not listing the device. Out of scope; the spec
+targets apps with their own audio stacks (Meet ✓, Zoom/Teams expected same architecture,
+still to be confirmed in a live call).
 
 - Fork BlackHole → rebrand "XVC Mic" (MAC_APP.md §2), build + codesign, install to
   `/Library/Audio/Plug-Ins/HAL/`, bounce coreaudiod.

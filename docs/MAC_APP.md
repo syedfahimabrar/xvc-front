@@ -112,6 +112,28 @@ How the loopback works (why writing to an output becomes a mic): BlackHole-style
 drivers expose one device with both output and input streams sharing a ring buffer —
 audio rendered to its output is readable at its input. No extra glue needed.
 
+### Known limitation: Apple voice-processing apps (FaceTime, likely WhatsApp)
+
+Apple's voice-processing audio unit **hard-mutes** virtual-device input. Measured with
+speech playing directly into XVC Mic and nothing on the speakers (so echo cancellation
+had no reference to subtract):
+
+| reader | peak |
+|---|---|
+| plain input unit (what Chrome/Zoom/Teams use) | 0.70–0.82 |
+| voice-processing unit (what FaceTime uses) | **0.0000 — exact zeros** |
+
+Exact zeros = a deliberate mute, not signal processing. Consequence: apps that do their
+own audio processing (Meet, Zoom, Teams, Discord, OBS) work; apps that route the mic
+through Apple's VP unit (FaceTime; WhatsApp desktop is the same frameworks family and
+does not even list the device) do not. No user-side setting helps — the default VP
+configuration is FaceTime's "Standard" mic mode, and Voice Isolation is stricter.
+
+If FaceTime ever becomes a requirement, the first experiment is the device's reported
+transport type (BlackHole reports `Virtual`; the VP unit may filter on it) — that means
+patching the property handler in BlackHole.c, which breaks our no-source-patch rule, so
+it stays a documented hypothesis until someone needs it.
+
 ## 3. Menu-bar UI (Phase 4 — keep Phase 1–2 headless/CLI)
 
 - **Target voice picker**: list of saved WAVs; "Add voice…" uploads via
