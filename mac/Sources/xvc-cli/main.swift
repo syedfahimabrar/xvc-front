@@ -211,6 +211,14 @@ do {
 let inputFormat = audio.captureEngine.inputNode.outputFormat(forBus: 0)
 print(String(format: "[xvc] in  \"%@\" %.0f Hz / %d ch -> 16 kHz",
              audio.inputDeviceName, inputFormat.sampleRate, inputFormat.channelCount))
+if inputFormat.sampleRate <= 16000 {
+    // A Bluetooth headset whose mic is in use drops to the hands-free profile: 16 kHz,
+    // telephone-grade, and it renegotiates the profile constantly, which reconfigures
+    // CoreAudio underneath us. Say so rather than silently converting a bad signal.
+    print("[xvc] warning: this mic runs at \(Int(inputFormat.sampleRate)) Hz — a Bluetooth")
+    print("[xvc]          headset in hands-free mode. Quality will be poor and the device")
+    print("[xvc]          will keep reconfiguring. Use --input-device \"MacBook Air Microphone\".")
+}
 print(String(format: "[xvc] out \"%@\" | hw latency %.1f ms | prime %.0f ms",
              audio.outputDeviceName,
              audio.playoutEngine.outputNode.presentationLatency * 1000, options.primeMs))

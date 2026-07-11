@@ -32,6 +32,9 @@ final class AudioIO {
     /// Fired when CoreAudio reconfigured underneath us and we rebuilt. Callers re-prime.
     var onReconfigured: ((String) -> Void)?
     private var observers: [NSObjectProtocol] = []
+    private var isRebuilding = false
+    private var rebuildScheduled = false
+    private(set) var rebuildCount = 0
 
     /// Seconds of audio between the socket and the ear: what's queued in the jitter buffer
     /// plus what the output hardware holds. Used to turn "arrived" into "heard".
@@ -97,13 +100,29 @@ final class AudioIO {
                 object: engine,
                 queue: .main
             ) { [weak self] _ in
-                self?.rebuild(reason: engine === self?.captureEngine ? "capture" : "playout")
+                guard let self else { return }
+                self.scheduleRebuild(reason: engine === self.captureEngine ? "capture" : "playout")
             }
             observers.append(token)
         }
     }
 
+    /// Restarting an engine itself posts a configuration change, so a naive handler rebuilds
+    /// forever: observed as alternating "playout reconfigured"/"capture reconfigured" lines,
+    /// each one resetting the jitter buffer and cutting the outgoing audio. Coalesce the
+    /// notifications and ignore the ones our own restart provokes.
+    private func scheduleRebuild(reason: String) {
+        guard !isRebuilding, !rebuildScheduled else { return }
+        rebuildScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.rebuildScheduled = false
+            self?.rebuild(reason: reason)
+        }
+    }
+
     private func rebuild(reason: String) {
+        isRebuilding = true
+        rebuildCount += 1
         captureEngine.stop()
         playoutEngine.stop()
         if let sourceNode { playoutEngine.detach(sourceNode) }
@@ -114,9 +133,13 @@ final class AudioIO {
         do {
             try startPlayout()
             try startCapture()
-            onReconfigured?("\(reason) engine reconfigured; rebuilt and re-primed")
+            onReconfigured?("\(reason) engine reconfigured; rebuilt and re-primed (#\(rebuildCount))")
         } catch {
             onReconfigured?("rebuild failed: \(error.localizedDescription)")
+        }
+        // Our own engine.start() posts a configuration change. Swallow the echo.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.isRebuilding = false
         }
     }
 

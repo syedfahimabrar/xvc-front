@@ -170,6 +170,8 @@ without opening a menu** — the user is speaking when they reach for it.
 | Laptop sleeps / device changes | rebuild both engines on `AVAudioEngineConfigurationChange`. **This fires when a meeting app selects "XVC Mic" as its microphone** (that changes the system default input). AVAudioEngine responds by *stopping*: the jitter buffer freezes, we stop sending, and the far end hears silence with nothing printed. Observed exactly this on the first real call. |
 | A meeting app takes XVC Mic as its mic | **Pin capture to a real device at startup.** An engine that follows the system default input will start capturing our own converted output the moment a call selects XVC Mic. |
 | Re-pointing a device | Read the node's format *after* the switch, and use `inputFormat(forBus:)`, not `outputFormat(forBus:)` — the latter goes stale and `connect` throws "Input HW format and tap format not matching", crashing at startup. |
+| Rebuilding on reconfiguration | **Restarting an engine posts its own configuration change.** A naive handler rebuilds forever — observed as alternating "playout/capture reconfigured" lines, each resetting the jitter buffer and cutting the outgoing audio. Coalesce notifications and ignore the echo of your own restart. |
+| Bluetooth headset as the mic | Using an AirPods/Beats mic forces the headset into the hands-free profile: 16 kHz telephone-grade audio, and constant profile renegotiation that reconfigures CoreAudio. Detect a ≤16 kHz input and warn; prefer the built-in mic. |
 | No mic permission | clear one-click guidance to System Settings |
 
 ## 5. Project layout suggestion
