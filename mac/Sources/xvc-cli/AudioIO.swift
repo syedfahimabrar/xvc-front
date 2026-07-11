@@ -11,8 +11,8 @@ import AVFoundation
 /// So `captureEngine` stays on the default input device and `playoutEngine` owns the output
 /// device. This is what docs/MAC_APP.md §1 prescribes.
 final class AudioIO {
-    let captureEngine = AVAudioEngine()
-    let playoutEngine = AVAudioEngine()
+    private(set) var captureEngine = AVAudioEngine()
+    private(set) var playoutEngine = AVAudioEngine()
     let jitter: JitterBuffer
 
     /// Called on the capture thread with 16 kHz mono PCM and the time the audio was
@@ -74,9 +74,17 @@ final class AudioIO {
     }
 
     func start() throws {
+        // The initial engine.start() posts its own configuration change, which would arrive
+        // just after we register observers and trigger a pointless rebuild on every launch
+        // (observed: "#1" at startup, 2.4 s latency spike, ~10 s to recover). Swallow it the
+        // same way rebuild() swallows its own echo.
+        isRebuilding = true
         try startPlayout()
         try startCapture()
         observeConfigurationChanges()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.isRebuilding = false
+        }
     }
 
     func stop() {
@@ -123,21 +131,30 @@ final class AudioIO {
     private func rebuild(reason: String) {
         isRebuilding = true
         rebuildCount += 1
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers = []
         captureEngine.stop()
         playoutEngine.stop()
-        if let sourceNode { playoutEngine.detach(sourceNode) }
-        if let sinkNode { captureEngine.detach(sinkNode) }
         sourceNode = nil
         sinkNode = nil
+
+        // Recreate the engines, do NOT reuse them. A stopped engine reconnected after a
+        // device change can come back with its input node delivering pure zeros: the
+        // pipeline stats look healthy (silence converts to silence), the far end hears
+        // nothing, and no API reports an error. Observed on the first real call.
+        captureEngine = AVAudioEngine()
+        playoutEngine = AVAudioEngine()
         jitter.reset()
         do {
             try startPlayout()
             try startCapture()
-            onReconfigured?("\(reason) engine reconfigured; rebuilt and re-primed (#\(rebuildCount))")
+            onReconfigured?("\(reason) engine reconfigured; rebuilt fresh engines (#\(rebuildCount))")
         } catch {
             onReconfigured?("rebuild failed: \(error.localizedDescription)")
         }
-        // Our own engine.start() posts a configuration change. Swallow the echo.
+        // The new engines need observers, and our own start() posts a configuration
+        // change — swallow that echo.
+        observeConfigurationChanges()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.isRebuilding = false
         }

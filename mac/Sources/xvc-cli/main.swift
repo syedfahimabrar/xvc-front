@@ -184,7 +184,25 @@ let stopSignal = StopSignal()
 // bursts of input, which makes windows complete in clumps.
 let tapIntervals = TapIntervals()
 
+/// Peak mic level since last read. The last two silent-failure bugs were invisible
+/// because nothing measured the input signal — this makes a dead mic impossible to miss.
+final class MicLevel: @unchecked Sendable {
+    private let lock = NSLock()
+    private var peak: Float = 0
+    func update(_ pcm: [Float]) {
+        var p: Float = 0
+        for sample in pcm { p = max(p, abs(sample)) }
+        lock.lock(); peak = max(peak, p); lock.unlock()
+    }
+    func readAndReset() -> Float {
+        lock.lock(); defer { lock.unlock() }
+        let p = peak; peak = 0; return p
+    }
+}
+let micLevel = MicLevel()
+
 audio.onCapturedChunk = { pcm, capturedAt in
+    micLevel.update(pcm)
     tapIntervals.mark(machNow())
     tracker.recordSend(frames: pcm.count, capturedAt: capturedAt)
     let data = pcm.withUnsafeBufferPointer { Data(buffer: $0) }
@@ -241,8 +259,10 @@ reportLoop: while Date() < deadline && !stopSignal.stopped {
         if stopSignal.stopped { break reportLoop }
     }
     if let r = tracker.rolling() {
-        print(String(format: "  p50 %6.1f ms   p95 %6.1f ms   buffer %4d frames   underruns %d",
-                     r.p50 * 1000, r.p95 * 1000, jitter.bufferedFrames, jitter.underruns))
+        let mic = micLevel.readAndReset()
+        let micNote = mic < 0.001 ? "  << MIC SILENT" : ""
+        print(String(format: "  p50 %6.1f ms   p95 %6.1f ms   buffer %4d frames   underruns %d   mic %5.3f%@",
+                     r.p50 * 1000, r.p95 * 1000, jitter.bufferedFrames, jitter.underruns, mic, micNote))
     } else {
         print("  (no audio back yet — is the mic capturing? check System Settings ▸ Privacy ▸ Microphone)")
     }
