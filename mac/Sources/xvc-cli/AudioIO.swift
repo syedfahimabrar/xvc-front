@@ -82,78 +82,147 @@ final class AudioIO {
         try startPlayout()
         try startCapture()
         observeConfigurationChanges()
+        startWatchdog()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.isRebuilding = false
         }
     }
 
     func stop() {
+        watchdog?.cancel()
+        watchdog = nil
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         observers = []
         captureEngine.stop()
         playoutEngine.stop()
+    }
+
+    private func startWatchdog() {
+        let now = machNow()
+        healthLock.lock(); lastChunkAt = now; lastNonzeroAt = now; healthLock.unlock()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 2, repeating: 1)
+        timer.setEventHandler { [weak self] in self?.checkCaptureHealth() }
+        timer.resume()
+        watchdog = timer
+    }
+
+    private func checkCaptureHealth() {
+        guard !isRebuilding, !rebuildScheduled else { return }
+        let now = machNow()
+        healthLock.lock()
+        let sinceChunk = now - lastChunkAt
+        let sinceNonzero = now - lastNonzeroAt
+        healthLock.unlock()
+
+        if sinceNonzero < 1.0 { watchdogStrikes = 0 }
+
+        // Exponential backoff so a genuinely muted mic doesn't rebuild forever.
+        let zeroGrace = 3.0 * pow(2.0, Double(min(watchdogStrikes, 4)))
+        let reason: String?
+        if sinceChunk > 1.5 {
+            reason = String(format: "no capture callbacks for %.1f s", sinceChunk)
+        } else if sinceNonzero > zeroGrace {
+            reason = String(format: "mic delivering pure zeros for %.1f s", sinceNonzero)
+        } else {
+            reason = nil
+        }
+        if let reason {
+            watchdogStrikes += 1
+            onReconfigured?("capture watchdog: \(reason); forcing capture rebuild")
+            scheduleRebuild(capture: true)
+        }
     }
 
     // MARK: - surviving device changes
     //
-    // CoreAudio reconfigures when a device is added, removed, or seized -- and crucially when
-    // a meeting app selects "XVC Mic" as its microphone, which changes the system default
-    // input. AVAudioEngine responds by STOPPING. Without this, both engines die mid-call: the
-    // jitter buffer freezes, we stop sending, and the far end hears silence with no error
-    // printed anywhere. docs/MAC_APP.md §4.
+    // CoreAudio reconfigures when a device is added, removed, or seized -- and when a call
+    // app enables voice processing on the built-in mic. AVAudioEngine responds by STOPPING,
+    // so we must rebuild. But rebuild ONLY the engine that changed: the far-end app reads
+    // XVC Mic continuously, and tearing down the playout engine because the *microphone*
+    // changed yanks the device's stream out from under that reader mid-call. Some readers
+    // never recover -- observed as "one hello, then permanent silence" while every client
+    // stat stayed green (we were rendering into XVC Mic; the far app had stopped listening).
+    private var needsCaptureRebuild = false
+    private var needsPlayoutRebuild = false
+
+    // Capture-health watchdog. AVAudioEngineConfigurationChange does NOT always fire: a
+    // nominal sample-rate change on the pinned mic made the capture engine deliver pure
+    // zeros with no notification and no error (reproduced deterministically). The input
+    // signal itself is the only trustworthy liveness indicator, so we watch it and force a
+    // capture rebuild when it dies. A real mic always has a noise floor (~0.017 measured);
+    // exact zeros mean a dead engine, not a quiet room.
+    private let healthLock = NSLock()
+    private var lastChunkAt: Double = 0
+    private var lastNonzeroAt: Double = 0
+    private var watchdog: DispatchSourceTimer?
+    private var watchdogStrikes = 0
+
     private func observeConfigurationChanges() {
-        for engine in [captureEngine, playoutEngine] {
-            let token = NotificationCenter.default.addObserver(
-                forName: .AVAudioEngineConfigurationChange,
-                object: engine,
-                queue: .main
-            ) { [weak self] _ in
-                guard let self else { return }
-                self.scheduleRebuild(reason: engine === self.captureEngine ? "capture" : "playout")
-            }
-            observers.append(token)
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers = []
+        let capture = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: captureEngine, queue: .main
+        ) { [weak self] _ in
+            self?.scheduleRebuild(capture: true)
         }
+        let playout = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: playoutEngine, queue: .main
+        ) { [weak self] _ in
+            self?.scheduleRebuild(capture: false)
+        }
+        observers = [capture, playout]
     }
 
-    /// Restarting an engine itself posts a configuration change, so a naive handler rebuilds
-    /// forever: observed as alternating "playout reconfigured"/"capture reconfigured" lines,
-    /// each one resetting the jitter buffer and cutting the outgoing audio. Coalesce the
-    /// notifications and ignore the ones our own restart provokes.
-    private func scheduleRebuild(reason: String) {
-        guard !isRebuilding, !rebuildScheduled else { return }
+    /// Restarting an engine posts its own configuration change, so a naive handler rebuilds
+    /// forever. Coalesce notifications and ignore the echo of our own restarts.
+    private func scheduleRebuild(capture: Bool) {
+        guard !isRebuilding else { return }
+        if capture { needsCaptureRebuild = true } else { needsPlayoutRebuild = true }
+        guard !rebuildScheduled else { return }
         rebuildScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.rebuildScheduled = false
-            self?.rebuild(reason: reason)
+            self?.rebuild()
         }
     }
 
-    private func rebuild(reason: String) {
+    private func rebuild() {
         isRebuilding = true
         rebuildCount += 1
-        observers.forEach { NotificationCenter.default.removeObserver($0) }
-        observers = []
-        captureEngine.stop()
-        playoutEngine.stop()
-        sourceNode = nil
-        sinkNode = nil
+        let doCapture = needsCaptureRebuild
+        let doPlayout = needsPlayoutRebuild
+        needsCaptureRebuild = false
+        needsPlayoutRebuild = false
 
-        // Recreate the engines, do NOT reuse them. A stopped engine reconnected after a
-        // device change can come back with its input node delivering pure zeros: the
-        // pipeline stats look healthy (silence converts to silence), the far end hears
-        // nothing, and no API reports an error. Observed on the first real call.
-        captureEngine = AVAudioEngine()
-        playoutEngine = AVAudioEngine()
-        jitter.reset()
+        // Recreate the affected engine; do NOT restart the old instance. A stopped engine
+        // reconnected after a device change can resume with its input delivering pure zeros
+        // and no error from any API.
+        var rebuilt: [String] = []
         do {
-            try startPlayout()
-            try startCapture()
-            onReconfigured?("\(reason) engine reconfigured; rebuilt fresh engines (#\(rebuildCount))")
+            if doPlayout {
+                playoutEngine.stop()
+                sourceNode = nil
+                playoutEngine = AVAudioEngine()
+                jitter.reset()   // playout restarted from scratch: buffered audio is stale
+                try startPlayout()
+                rebuilt.append("playout")
+            }
+            if doCapture {
+                captureEngine.stop()
+                sinkNode = nil
+                captureEngine = AVAudioEngine()
+                try startCapture()
+                rebuilt.append("capture")
+                let now = machNow()
+                healthLock.lock(); lastChunkAt = now; lastNonzeroAt = now; healthLock.unlock()
+            }
+            onReconfigured?("rebuilt \(rebuilt.joined(separator: "+")) engine (#\(rebuildCount))"
+                + (doPlayout ? "" : " — playout untouched, XVC Mic stream unbroken"))
         } catch {
             onReconfigured?("rebuild failed: \(error.localizedDescription)")
         }
-        // The new engines need observers, and our own start() posts a configuration
-        // change — swallow that echo.
+        // Fresh engines need fresh observers, and our own start() posts a change — swallow it.
         observeConfigurationChanges()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.isRebuilding = false
@@ -315,6 +384,15 @@ final class AudioIO {
         let capturedAt = AVAudioTime.seconds(forHostTime: hostTime) + Double(frames) / inputFormat.sampleRate
 
         let pcm = Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength)))
+
+        var peak: Float = 0
+        for sample in pcm { peak = max(peak, abs(sample)) }
+        let now = machNow()
+        healthLock.lock()
+        lastChunkAt = now
+        if peak > 1e-6 { lastNonzeroAt = now }
+        healthLock.unlock()
+
         onCapturedChunk?(pcm, capturedAt)
     }
 }
