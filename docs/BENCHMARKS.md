@@ -74,6 +74,35 @@ property of X-VC — a dedicated box should not reproduce it. Worth confirming o
 (run the sweep there while PersonaPlex is serving, and again while it is idle), but it no
 longer blocks anything.
 
+## Apple Silicon — can the model run on the Mac itself? Measured: no.
+
+M3 (base, MacBook Air, 16 GB), torch 2.5.1 MPS + `PYTORCH_ENABLE_MPS_FALLBACK=1`,
+20 iters after 5 warm-ups, defaults (`CHUNK_MS=2400`). `tools/mps_bench.py`, 2026-07-11.
+
+| device | p50 | p95 | budget | load | memory |
+|---|---|---|---|---|---|
+| RTX 3080 (reference) | 33.1 ms | 34.2 ms | <120 ms | 0.28x | 2.5 GB |
+| **M3 MPS** | **1227.6 ms** | **1644.3 ms** | <120 ms | **13.7x** | 2.26 GB |
+
+**Memory is not the constraint** (2.26 GB of 16 GB unified — any M-series Mac holds it).
+Compute is: the M3 needs ~1.3 s to emit each 120 ms window, so delay grows ~12 s per
+second of speech. No window tuning bridges 13.7x, and lever 1's ceiling is 2x. A top
+M4 Max (~4x the base M3 GPU) would still land ~3x over budget.
+
+Honest caveats: MPS fallback may push some ops to CPU, and a real port (MLX/Core ML,
+fp16, fused kernels) could plausibly buy 2–5x — still short of 14x, and that is a
+research project, not packaging. Model load on M3: 31.7 s; `load-target` equivalent:
+5.3 s (vs 0.9 s server-side). Shipping would also mean a ~6 GB download per user
+(xvc.pt 4.66 GB + GLM tokenizer 1.36 GB) with weight licensing unexamined.
+
+Local inference also would NOT deliver "much lower latency": of the measured ~400 ms,
+only ~6 ms is network and ~160 ms jitter buffer (removable locally); the 240 ms
+algorithmic look-ahead is a property of the model on any hardware. Local best case
+≈ 250–300 ms — and only if compute fit the budget, which it does not.
+
+**Consequence: the "X-VC never runs on the Mac" architecture decision is now backed by
+measurement, not assumption.** Revisit only if the model family changes.
+
 ## Dedicated box (Phase 3)
 
 _Not yet provisioned. Re-run the sweep after `setup.sh` to confirm the settings above hold._

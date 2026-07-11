@@ -112,6 +112,9 @@ in Zoom → converted conversation works.
 
 - Windows/Linux clients (revisit after macOS proves the concept; Windows needs a
   signed driver — real cost/bureaucracy).
+- **On-device inference on Apple Silicon** — measured infeasible 2026-07-11: 13.7x over
+  the real-time budget on an M3, and the dominant latency terms (240 ms look-ahead) are
+  model properties that local execution does not remove. `docs/BENCHMARKS.md`.
 - Conversion-strength slider (speaker-embedding interpolation) — researched separately
   in the Hear-Me-Out project; port here once the basic pipeline is solid.
 - Opus compression of the WS audio (raw float32 @ 16 kHz is only ~512 kbit/s; not worth
