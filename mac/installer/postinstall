@@ -1,0 +1,7 @@
+#!/bin/bash
+# Runs after the pkg lays down the app and the XVC Mic driver. CoreAudio only rescans HAL
+# plug-ins on restart, so bounce coreaudiod to make "XVC Mic" appear without a reboot. It
+# respawns instantly; every audio product does this.
+set -e
+/usr/bin/killall coreaudiod 2>/dev/null || true
+exit 0

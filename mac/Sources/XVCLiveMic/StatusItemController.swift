@@ -56,24 +56,30 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     private func render(_ state: Engine.State) {
         guard let button = statusItem.button else { return }
-        let (symbol, desc): (String, String)
+        // A colored (non-template) symbol actually shows color in the menu bar; a template
+        // one is forced to the bar's black/white and ignores contentTintColor — which is why
+        // the earlier tinted "converting" looked identical to passthrough. So: converting is
+        // GREEN, passthrough/idle are plain monochrome. Green vs. mono is the at-a-glance cue
+        // that the far end hears the converted voice, not your real one (docs/MAC_APP.md §3.1).
+        let (symbol, color, desc): (String, NSColor?, String)
         switch state {
-        case .idle:         (symbol, desc) = ("mic.slash", "XVC: off")
-        case .passthrough:  (symbol, desc) = ("mic", "XVC: passthrough (your real voice)")
-        case .connecting:   (symbol, desc) = ("mic.badge.ellipsis", "XVC: connecting")
-        case .converting:   (symbol, desc) = ("mic.fill", "XVC: converting")
-        case .error:        (symbol, desc) = ("exclamationmark.triangle.fill", "XVC: error")
+        case .idle:        (symbol, color, desc) = ("mic.slash", nil, "XVC: off")
+        case .passthrough: (symbol, color, desc) = ("mic", nil, "XVC: passthrough — your real voice")
+        case .connecting:  (symbol, color, desc) = ("mic.badge.ellipsis", .systemOrange, "XVC: connecting…")
+        case .converting:  (symbol, color, desc) = ("mic.fill", .systemGreen, "XVC: converting — far end hears the converted voice")
+        case .error:       (symbol, color, desc) = ("exclamationmark.triangle.fill", .systemRed, "XVC: error (right-click for details)")
         }
-        let img = NSImage(systemSymbolName: symbol, accessibilityDescription: desc)
-        img?.isTemplate = true                  // tracks the light/dark menu bar
-        button.image = img
-        // Tint the converting state so it's unmistakable at a glance (the only cue the far
-        // end is hearing the converted voice).
-        button.contentTintColor = {
-            if case .converting = state { return .controlAccentColor }
-            if case .error = state { return .systemRed }
-            return nil
-        }()
+        let base = NSImage(systemSymbolName: symbol, accessibilityDescription: desc)
+        if let color {
+            let cfg = NSImage.SymbolConfiguration(paletteColors: [color])
+            let colored = base?.withSymbolConfiguration(cfg)
+            colored?.isTemplate = false
+            button.image = colored
+        } else {
+            base?.isTemplate = true            // tracks the light/dark menu bar
+            button.image = base
+        }
+        button.contentTintColor = nil
         button.toolTip = desc
     }
 

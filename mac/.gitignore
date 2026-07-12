@@ -1,2 +1,5 @@
 
 build/
+installer/build/
+installer/AppIcon.icns
+installer/AppIcon.iconset/

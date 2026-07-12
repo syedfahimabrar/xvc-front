@@ -53,7 +53,34 @@ final class Engine: ObservableObject {
     // MARK: - lifecycle
 
     /// Bring the pipeline up in passthrough. Idempotent.
+    ///
+    /// Microphone permission must exist BEFORE the AVAudioEngine is created. macOS does not
+    /// feed audio to an already-running engine when permission is granted mid-session, so a
+    /// first-run app that starts capture then asks would capture silence until relaunch (we
+    /// hit exactly this). Requesting first, and building the engine only once authorized,
+    /// removes the relaunch.
     func start() {
+        guard audio == nil else { return }
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            reallyStart()
+        case .notDetermined:
+            state = .connecting
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if granted { self.reallyStart() }
+                    else { self.state = .error("Microphone access denied") }
+                }
+            }
+        case .denied, .restricted:
+            state = .error("Microphone access off — enable it in System Settings › Privacy › Microphone")
+        @unknown default:
+            reallyStart()
+        }
+    }
+
+    private func reallyStart() {
         guard audio == nil else { return }
         guard let xvcMic = AudioDevices.findOutput(named: "XVC Mic") else {
             state = .error("\"XVC Mic\" device not found — install the driver")
@@ -69,6 +96,7 @@ final class Engine: ObservableObject {
             setConverting(false)
             state = .passthrough
             log("started: in=\(io.inputDeviceName) out=\(io.outputDeviceName)")
+            if convertRequested { connect() }   // user asked to convert during the mic prompt
         } catch {
             log("start failed: \(error)")
             state = .error(error.localizedDescription)

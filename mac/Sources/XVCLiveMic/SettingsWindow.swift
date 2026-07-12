@@ -59,12 +59,17 @@ private struct SettingsView: View {
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Spacer()
-                Button("Save") { save() }.keyboardShortcut(.defaultAction)
+                Button("Save") { save(); close() }.keyboardShortcut(.defaultAction)
             }
         }
         .formStyle(.grouped)
         .frame(width: 420, height: 340)
         .onDisappear { save() }
+    }
+
+    private func close() {
+        // Dismiss the hosting window after saving, so the panel doesn't linger.
+        NSApp.keyWindow?.close()
     }
 
     private func save() {

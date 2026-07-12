@@ -1,0 +1,82 @@
+name: Build installer
+
+# Builds the one-download .pkg (app + XVC Mic driver). Runs on every push to main and on
+# version tags; a tag also publishes the pkg as a GitHub Release asset.
+#
+# It builds UNSIGNED out of the box (installs via right-click Open). To get a signed,
+# notarized pkg that installs with a normal double-click, add these repo secrets — all
+# optional; each is a no-op if absent:
+#   MACOS_CERT_P12         base64 of a .p12 holding BOTH "Developer ID Application" and
+#                          "Developer ID Installer" certs (export from Keychain, one file)
+#   MACOS_CERT_PASSWORD    the .p12 export password
+#   APP_SIGN_ID            e.g. "Developer ID Application: Name (TEAMID)"
+#   INSTALLER_SIGN_ID      e.g. "Developer ID Installer: Name (TEAMID)"
+#   NOTARY_APPLE_ID        smfabrar@kth.se
+#   NOTARY_TEAM_ID         your Apple Developer team id
+#   NOTARY_PASSWORD        an app-specific password for that Apple ID
+#
+# The pkg identifier is se.kth.tmh.smfabrar (installer/build-pkg.sh).
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # to attach the pkg to a Release on tags
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:                 # job-level so step `if:` can see them (secrets aren't visible to if:)
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      APP_SIGN_ID: ${{ secrets.APP_SIGN_ID }}
+      INSTALLER_SIGN_ID: ${{ secrets.INSTALLER_SIGN_ID }}
+      NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+      NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+      NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import signing certificate
+        if: env.MACOS_CERT_P12 != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          KPASS="$(openssl rand -hex 16)"
+          security create-keychain -p "$KPASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KPASS" "$KEYCHAIN"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KPASS" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Set up notarization profile
+        if: env.NOTARY_APPLE_ID != ''
+        run: |
+          xcrun notarytool store-credentials xvc-notary \
+            --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD"
+
+      - name: Build the installer
+        env:
+          NOTARY_PROFILE: ${{ env.NOTARY_APPLE_ID != '' && 'xvc-notary' || '' }}
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '0.0.0-dev' }}
+        run: |
+          cd mac/installer
+          ./build-pkg.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XVCLiveMic-installer
+          path: mac/installer/build/*.pkg
+
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mac/installer/build/*.pkg
