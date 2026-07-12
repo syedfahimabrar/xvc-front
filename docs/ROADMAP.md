@@ -73,9 +73,17 @@ still to be confirmed in a live call).
 **Exit gate:** far-end participant hears the converted voice, quality comparable to a
 direct recording; device survives reboot.
 
-## Phase 3 — Dedicated backend
+## Phase 3 — Dedicated backend — code written, box not yet provisioned
 
 **Goal:** self-contained server this project owns.
+
+**Status:** `server/xvc_server.py` (trimmed reference: `load-target` + `stream`, bearer-token
+auth, startup warm-up) and `server/setup.sh` (one-command provisioning: env + models + TLS +
+token + systemd + benchmark) are written. Both clients send the token (`XVC_TOKEN` /
+`--token`), verified backward-compatible with the open KTH server. Auth logic tested against
+the real handlers (401 for missing/wrong token, valid passes, open when unset).
+**Remaining:** provision the GPU box, run `setup.sh`, re-run the benchmark there, switch the
+Mac client over, and try the `CURRENT_MS=60` latency experiment (docs/BENCHMARKS.md).
 
 - `server/`: trimmed copy of `docs/reference/hearmeout-xvc-server.py` — keep
   `load-target` + `stream`, drop `chat-proxy`/sphn/PersonaPlex; add `XVC_AUTH_TOKEN`

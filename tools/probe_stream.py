@@ -57,7 +57,7 @@ def write_wav(path: str, pcm: np.ndarray, sr: int = SR) -> None:
         w.writeframes((np.clip(pcm, -1, 1) * 32767).astype("<i2").tobytes())
 
 
-def upload_target(base_url: str, wav_path: str, insecure: bool) -> str:
+def upload_target(base_url: str, wav_path: str, insecure: bool, token: str) -> str:
     """POST /load-target as multipart/form-data with the single field 'wav'."""
     with open(wav_path, "rb") as f:
         payload = f.read()
@@ -68,10 +68,13 @@ def upload_target(base_url: str, wav_path: str, insecure: bool) -> str:
         f"Content-Type: audio/wav\r\n\r\n"
     ).encode() + payload + f"\r\n--{boundary}--\r\n".encode()
 
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(
         f"{base_url}/api/meanvc/load-target",
         data=body,
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        headers=headers,
         method="POST",
     )
     ctx = ssl._create_unverified_context() if insecure else None
@@ -93,7 +96,7 @@ async def run(args) -> int:
     scheme_ws = "ws" if args.no_tls else "wss"
     base = f"{scheme_http}://{args.host}:{args.port}"
 
-    target_id = args.target_id or upload_target(base, args.target_wav, args.insecure)
+    target_id = args.target_id or upload_target(base, args.target_wav, args.insecure, args.token)
 
     ssl_ctx = None
     if not args.no_tls:
@@ -102,7 +105,10 @@ async def run(args) -> int:
             ssl_ctx.check_hostname = False
             ssl_ctx.verify_mode = ssl.CERT_NONE
 
-    url = f"{scheme_ws}://{args.host}:{args.port}/api/meanvc/stream?target_id={target_id}&source_sr={SR}&steps=2"
+    # WS clients can't set request headers reliably, so the token rides in the query
+    # string (docs/PROTOCOL.md §3).
+    token_qs = f"&token={args.token}" if args.token else ""
+    url = f"{scheme_ws}://{args.host}:{args.port}/api/meanvc/stream?target_id={target_id}&source_sr={SR}&steps=2{token_qs}"
     chunk = args.chunk_ms * SR // 1000
 
     async with websockets.connect(url, ssl=ssl_ctx, max_size=None) as ws:
@@ -217,6 +223,8 @@ def main() -> int:
     p.add_argument("--skip-seconds", type=float, default=3.0,
                    help="exclude this much of the run from stats (session cold start)")
     p.add_argument("--out", help="write the converted audio here")
+    p.add_argument("--token", default=os.environ.get("XVC_TOKEN", ""),
+                   help="bearer token; defaults to $XVC_TOKEN (omit for an open server)")
     p.add_argument("--insecure", action="store_true", help="skip TLS verification (self-signed dev cert)")
     p.add_argument("--no-tls", action="store_true", help="plain ws:// (local server without SSL_DIR)")
     args = p.parse_args()

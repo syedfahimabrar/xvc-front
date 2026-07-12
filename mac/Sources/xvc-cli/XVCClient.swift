@@ -5,13 +5,15 @@ final class XVCClient: NSObject, URLSessionDelegate {
     private let host: String
     private let port: Int
     private let allowSelfSigned: Bool
+    private let token: String
 
     private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
 
-    init(host: String, port: Int, allowSelfSigned: Bool) {
+    init(host: String, port: Int, allowSelfSigned: Bool, token: String = "") {
         self.host = host
         self.port = port
         self.allowSelfSigned = allowSelfSigned
+        self.token = token
     }
 
     /// POST /api/meanvc/load-target, multipart with a single field named `wav`.
@@ -28,6 +30,7 @@ final class XVCClient: NSObject, URLSessionDelegate {
         var request = URLRequest(url: URL(string: "https://\(host):\(port)/api/meanvc/load-target")!)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
         let (data, response) = try await session.upload(for: request, from: body)
         guard let http = response as? HTTPURLResponse else { throw XVCError("no HTTP response") }
@@ -52,6 +55,9 @@ final class XVCClient: NSObject, URLSessionDelegate {
             URLQueryItem(name: "source_sr", value: String(sourceRate)),
             URLQueryItem(name: "steps", value: "2"),   // MeanVC only; X-VC ignores it
         ]
+        // WS clients can't set request headers reliably, so the token rides in the query
+        // string (docs/PROTOCOL.md §3).
+        if !token.isEmpty { components.queryItems?.append(URLQueryItem(name: "token", value: token)) }
 
         let task = session.webSocketTask(with: components.url!)
         task.resume()

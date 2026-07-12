@@ -8,8 +8,27 @@ The X-VC GPU server and its tooling. Nothing here runs on the Mac — X-VC needs
 | `download_models.py` | 0 | the three model assets, idempotent (BACKEND.md §2) |
 | `pyproject.toml` | 0 | pinned env, shared by benchmark and server (BACKEND.md §3) |
 | `bench.py` | 0 | per-window forward-time benchmark; decides whether a GPU can keep up |
-| `xvc_server.py` | 3 | trimmed streaming server (`load-target` + `stream` + token auth) — not written yet |
-| `setup.sh` | 3 | one-command provisioning, superset of `bootstrap.sh` — not written yet |
+| `xvc_server.py` | 3 | trimmed streaming server (`load-target` + `stream` + token auth + startup warm-up) |
+| `setup.sh` | 3 | one-command provisioning, superset of `bootstrap.sh` |
+
+## Standing up the dedicated server (Phase 3)
+
+On a fresh Ubuntu 22.04 box with an NVIDIA driver:
+
+```bash
+XVC_DIR=~/X-VC ./setup.sh          # env + models + TLS cert + token + systemd unit + bench
+sudo systemctl enable --now xvc-server
+journalctl -u xvc-server -f        # wait for "[xvc] warmed up"
+```
+
+`setup.sh` generates a self-signed cert (prints its SHA-256 to pin) and an auth token in
+`~/xvc-token`. Give the token to clients as `XVC_TOKEN`; point them at the box with
+`XVC_HOST`. A DNS name in `XVC_PUBLIC_HOST` makes it try Let's Encrypt instead.
+
+The server **warms the model at startup** (one full conversion of noise) before accepting
+connections — otherwise the first user pays the ~2.4 s lazy-init cost as mangled audio
+(`docs/BENCHMARKS.md`). Auth is enforced only when `XVC_AUTH_TOKEN` is set; unset means the
+server runs open and logs a warning.
 
 ## Running the Phase-0 benchmark
 

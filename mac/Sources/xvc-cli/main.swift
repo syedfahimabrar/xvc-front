@@ -12,6 +12,7 @@ struct Options {
     var targetWav: String?
     var targetID: String?
     var insecure = false
+    var token = ProcessInfo.processInfo.environment["XVC_TOKEN"] ?? ""
     var seconds = 120.0
     var primeMs = 180.0
     var troughMs = 80.0   // a starting guess; the buffer grows it on each underrun
@@ -42,6 +43,7 @@ func parseArguments() -> Options {
           --host <host>         server host; defaults to $XVC_HOST
           --port <port>         default 5002
           --insecure            trust the dev server's self-signed cert
+          --token <token>       bearer token; defaults to $XVC_TOKEN (omit for an open server)
           --seconds <n>         run duration, default 120 (the gate)
           --prime-ms <n>        jitter buffer prime depth, default 180
           --trough-ms <n>       starting buffer trough, default 80 (grows on underrun)
@@ -64,6 +66,7 @@ func parseArguments() -> Options {
     if let v = value("--prime-ms"), let m = Double(v) { options.primeMs = m }
     if let v = value("--trough-ms"), let m = Double(v) { options.troughMs = m }
     if let v = value("--device-buffer"), let f = Int(v) { options.deviceBufferFrames = f }
+    if let v = value("--token") { options.token = v }
     options.insecure = args.contains("--insecure")
     if let v = value("--output-device") { options.outputDevice = v }
     if let v = value("--input-device") { options.inputDevice = v }
@@ -96,7 +99,7 @@ guard options.targetWav != nil || options.targetID != nil else {
     fail("need --target-wav or --target-id (see --help)")
 }
 
-let client = XVCClient(host: options.host, port: options.port, allowSelfSigned: options.insecure)
+let client = XVCClient(host: options.host, port: options.port, allowSelfSigned: options.insecure, token: options.token)
 
 // 1. Register the target voice.
 var targetID: String

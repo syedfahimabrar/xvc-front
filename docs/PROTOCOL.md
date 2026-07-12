@@ -88,6 +88,9 @@ small jitter buffer before playback (see `docs/MAC_APP.md`).
   - a static **bearer token**: `Authorization: Bearer <token>` on `load-target`, and
     `?token=<token>` on the WebSocket URL (browsers/URLSession can't set WS headers
     reliably); server reads it from env `XVC_AUTH_TOKEN`, rejects with 401/4401 close.
+    **Implemented** in `server/xvc_server.py`: constant-time compare, checked before the
+    WS handshake so a bad token gets a plain HTTP 401; unset `XVC_AUTH_TOKEN` = open server
+    (logged loudly). Clients send it via `XVC_TOKEN` / `--token`.
   - real TLS if the box gets a hostname (Let's Encrypt), else documented self-signed
     with cert pinning in the app.
 
