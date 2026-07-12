@@ -84,10 +84,13 @@ bearer-token auth and startup warm-up over self-signed TLS. End to end from the 
 variance was PersonaPlex contention. Auth verified live (401 without token). Full table in
 `docs/BENCHMARKS.md`.
 
-**Still open:** the `CURRENT_MS=60` latency experiment (could shave ~120 ms; needs a
-listening check since it changes cross-fade cadence); reboot survival (no root on this box,
-so no systemd — running under nohup, does not survive reboot); real TLS if the box ever
-gets a hostname.
+**`CURRENT_MS=60` measured:** cuts full-client latency 373 → 291 ms (−82 ms / 22%), zero
+underruns, pitch preserved, GPU still comfortable at ~0.54x. Adopt it pending a listening
+A/B (it doubles cross-fade frequency); box currently runs 60 for that check. Default in
+`setup.sh` stays 120 until confirmed by ear (docs/BENCHMARKS.md).
+
+**Still open:** reboot survival (no root on this box, so no systemd — running under nohup,
+does not survive reboot); real TLS if the box ever gets a hostname.
 
 - `server/`: trimmed copy of `docs/reference/hearmeout-xvc-server.py` — keep
   `load-target` + `stream`, drop `chat-proxy`/sphn/PersonaPlex; add `XVC_AUTH_TOKEN`

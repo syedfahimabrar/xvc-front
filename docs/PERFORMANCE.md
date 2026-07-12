@@ -58,6 +58,10 @@ budget, and flat.
    windows/sec ⇒ ≈ **halves GPU load** (window cost is dominated by the fixed 2.4 s
    context). Cost: +120 ms latency. Usually the single change that turns "struggling"
    into "comfortable". Keep `CHUNK_MS` constraint in mind (see BACKEND.md §4).
+   **The lever runs both ways.** On a GPU with headroom, `120 → 60` *cuts* latency ~82 ms
+   end to end (measured, docs/BENCHMARKS.md) by halving look-ahead and burst size, at 2x
+   GPU load. Only worth it when load is well under budget — the dedicated 3080 sits at
+   0.27x, so 60 lands at ~0.54x.
 2. **Shrink `XVC_CHUNK_MS`** (e.g. 2400 → 1600): shorter context ⇒ cheaper forward.
    Quality risk — the model was tuned with 2.4 s windows; A/B a few voices before adopting.
 3. **fp16/bf16 inference + `torch.compile`** on the converter/decoder path: typically

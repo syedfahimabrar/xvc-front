@@ -138,6 +138,29 @@ p95 373 ms mic-to-ear, vs ~400–440 ms against KTH.
 **Phase-3 exit gate met:** Phase-1 latency gate (p95 < 500 ms, flat drift) passes against
 the dedicated server from the user's network — p95 186 ms wire, 373 ms full client.
 
+### The CURRENT_MS lever — measured on the dedicated box, 2026-07-12
+
+`PERFORMANCE.md` §3 only considered *raising* `CURRENT_MS` to cut GPU load. With the
+dedicated box at 0.27x load, we had room to go the other way. Dropping 120 → 60 halves
+both the algorithmic look-ahead (a window's average sample now waits `current/2 + smooth +
+future` = 150 ms, was 180 ms) and the client's burst size (60 ms, so the jitter-buffer
+floor halves):
+
+| setting | wire p50 / p95 | full client p50 / p95 | GPU load | underruns |
+|---|---|---|---|---|
+| CURRENT_MS=120 (default) | 183.9 / 186.3 ms | 360 / 373 ms | 0.27x | 0 |
+| **CURRENT_MS=60** | **162.3 / 163.8 ms** | **273 / 291 ms** | **~0.54x** | 0 |
+
+**~82 ms off the full client latency (22%)**, wire spread tightened to 9 ms, still zero
+underruns. Pitch tracking preserved: converted f0 106.7 Hz vs target 109.4 Hz, identical to
+the 120 run. GPU still comfortable at ~0.54x.
+
+Costs: 2x windows/sec means 2x GPU work (less headroom for concurrent sessions or bursts),
+and more frequent cross-fades (every 60 ms) — an **objective** quality check passed, but a
+listening A/B has not been done. `CURRENT_MS=120` remains the documented default in
+`setup.sh` until someone confirms 60 sounds as good by ear; the box currently runs 60 for
+that evaluation. Flip via the `XVC_CURRENT_MS` env / launch script.
+
 ---
 
 # End-to-end over the wire
