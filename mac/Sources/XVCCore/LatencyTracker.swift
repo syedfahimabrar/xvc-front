@@ -12,7 +12,8 @@ import Foundation
 /// What "now" means matters. Arrival at the socket is not arrival at the ear: the audio
 /// still has to clear the jitter buffer and the output hardware. So callers pass that
 /// residual in as `pendingPlayout`, and we report the sum.
-final class LatencyTracker {
+public final class LatencyTracker {
+    public init() {}
     private struct SentChunk {
         let endSample: Int      // cumulative input sample index, exclusive
         let capturedAt: Double  // seconds, mach timebase
@@ -26,9 +27,9 @@ final class LatencyTracker {
     private var wireLatencies: [Double] = []  // to the socket — comparable to probe_stream.py
     private let lock = NSLock()
 
-    private(set) var lastLatency: Double = 0
+    public private(set) var lastLatency: Double = 0
 
-    func recordSend(frames: Int, capturedAt: Double) {
+    public func recordSend(frames: Int, capturedAt: Double) {
         lock.lock(); defer { lock.unlock() }
         inputSamples += frames
         sent.append(SentChunk(endSample: inputSamples, capturedAt: capturedAt))
@@ -37,7 +38,7 @@ final class LatencyTracker {
     /// - Parameter pendingPlayout: seconds of audio still ahead of this sample before it
     ///   reaches the ear (jitter-buffer depth + output hardware latency).
     @discardableResult
-    func recordReceive(frames: Int, now: Double, pendingPlayout: Double) -> Double? {
+    public func recordReceive(frames: Int, now: Double, pendingPlayout: Double) -> Double? {
         lock.lock(); defer { lock.unlock() }
         outputSamples += frames
 
@@ -60,7 +61,7 @@ final class LatencyTracker {
     }
 
     /// p50/p95 over the most recent `window` measurements (rolling, as the gate requires).
-    func rolling(window: Int = 250) -> (p50: Double, p95: Double, count: Int)? {
+    public func rolling(window: Int = 250) -> (p50: Double, p95: Double, count: Int)? {
         lock.lock(); defer { lock.unlock() }
         guard !latencies.isEmpty else { return nil }
         let recent = Array(latencies.suffix(window)).sorted()
@@ -70,7 +71,7 @@ final class LatencyTracker {
     /// Overall stats plus drift: median of the last third minus the first third. A rising
     /// number is the failure mode from PERFORMANCE.md §1 — the server falling behind a
     /// little on every window, so delay grows for as long as someone talks.
-    func summary(skip: Int = 0) -> (p50: Double, p95: Double, min: Double, max: Double, drift: Double, count: Int)? {
+    public func summary(skip: Int = 0) -> (p50: Double, p95: Double, min: Double, max: Double, drift: Double, count: Int)? {
         lock.lock(); defer { lock.unlock() }
         let usable = latencies.count > skip ? Array(latencies.dropFirst(skip)) : []
         guard usable.count >= 10 else { return nil }
@@ -84,7 +85,7 @@ final class LatencyTracker {
 
     /// Capture-to-socket only, excluding the jitter buffer and output hardware. This is the
     /// number tools/probe_stream.py reports, so a gap between them is client-side.
-    func wireSummary(skip: Int = 0) -> (p50: Double, p95: Double)? {
+    public func wireSummary(skip: Int = 0) -> (p50: Double, p95: Double)? {
         lock.lock(); defer { lock.unlock() }
         let usable = wireLatencies.count > skip ? Array(wireLatencies.dropFirst(skip)) : []
         guard usable.count >= 10 else { return nil }
@@ -100,25 +101,26 @@ final class LatencyTracker {
 }
 
 /// Seconds on the same mach timebase the audio engine timestamps buffers with.
-func machNow() -> Double {
+public func machNow() -> Double {
     AVAudioTime.seconds(forHostTime: mach_absolute_time())
 }
 
 /// Diagnostic: the wall-clock gap between successive mic tap callbacks. If the tap is
 /// ragged, the server receives input in clumps and emits output in clumps, which shows up
 /// as a latency tail no amount of client-side buffering can remove.
-final class TapIntervals {
+public final class TapIntervals {
+    public init() {}
     private var last: Double = 0
     private var gaps: [Double] = []
     private let lock = NSLock()
 
-    func mark(_ now: Double) {
+    public func mark(_ now: Double) {
         lock.lock(); defer { lock.unlock() }
         if last > 0 { gaps.append(now - last) }
         last = now
     }
 
-    func summary() -> (p50: Double, p95: Double, max: Double)? {
+    public func summary() -> (p50: Double, p95: Double, max: Double)? {
         lock.lock(); defer { lock.unlock() }
         guard gaps.count >= 10 else { return nil }
         let sorted = gaps.sorted()

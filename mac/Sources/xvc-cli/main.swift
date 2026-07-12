@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import XVCCore
 
 // Phase 1 (docs/ROADMAP.md): mic -> 16 kHz -> WebSocket -> jitter buffer -> HEADPHONES.
 // No virtual mic, no UI. The gate is p95 < 500 ms over 2 minutes with no growing drift.

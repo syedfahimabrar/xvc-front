@@ -1,7 +1,7 @@
 import Foundation
 
 /// Client for the two endpoints in docs/PROTOCOL.md: `load-target` and `stream`.
-final class XVCClient: NSObject, URLSessionDelegate {
+public final class XVCClient: NSObject, URLSessionDelegate {
     private let host: String
     private let port: Int
     private let allowSelfSigned: Bool
@@ -9,7 +9,7 @@ final class XVCClient: NSObject, URLSessionDelegate {
 
     private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
 
-    init(host: String, port: Int, allowSelfSigned: Bool, token: String = "") {
+    public init(host: String, port: Int, allowSelfSigned: Bool, token: String = "") {
         self.host = host
         self.port = port
         self.allowSelfSigned = allowSelfSigned
@@ -18,7 +18,7 @@ final class XVCClient: NSObject, URLSessionDelegate {
 
     /// POST /api/meanvc/load-target, multipart with a single field named `wav`.
     /// Returns the target_id — an in-memory handle that does not survive a server restart.
-    func loadTarget(wavURL: URL) async throws -> (id: String, duration: Double) {
+    public func loadTarget(wavURL: URL) async throws -> (id: String, duration: Double) {
         let boundary = UUID().uuidString
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -44,7 +44,7 @@ final class XVCClient: NSObject, URLSessionDelegate {
 
     /// Opens the stream and waits for `{"status":"ready"}` before returning. Clients MUST
     /// NOT send audio before that frame arrives (docs/PROTOCOL.md §2).
-    func openStream(targetID: String, sourceRate: Int) async throws -> URLSessionWebSocketTask {
+    public func openStream(targetID: String, sourceRate: Int) async throws -> URLSessionWebSocketTask {
         var components = URLComponents()
         components.scheme = "wss"
         components.host = host
@@ -80,7 +80,7 @@ final class XVCClient: NSObject, URLSessionDelegate {
     /// Dev-only trust override for the KTH server's self-signed cert (docs/PROTOCOL.md §3).
     /// Gated behind --insecure and scoped to the one host we were pointed at; never ship a
     /// build where this can fire by default.
-    func urlSession(_ session: URLSession,
+    public func urlSession(_ session: URLSession,
                     didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         guard allowSelfSigned,
@@ -96,7 +96,7 @@ final class XVCClient: NSObject, URLSessionDelegate {
 
 /// Pumps binary frames out of the socket until it closes. Text frames are `{"error": …}`
 /// and are fatal for the session.
-func receiveLoop(_ task: URLSessionWebSocketTask,
+public func receiveLoop(_ task: URLSessionWebSocketTask,
                  onPCM: @escaping ([Float], Double) -> Void,
                  onClose: @escaping (String?) -> Void) {
     task.receive { result in

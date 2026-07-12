@@ -12,7 +12,7 @@ import Foundation
 /// (it can block if the writer holds it), but the writer's critical section is a memcpy of
 /// at most 1920 frames, and this is a measurement prototype. A production build should use
 /// a single-producer/single-consumer lock-free ring.
-final class JitterBuffer {
+public final class JitterBuffer {
     private var storage: [Float]
     private var readIndex = 0
     private var count = 0
@@ -21,8 +21,8 @@ final class JitterBuffer {
     private let primeFrames: Int
     private var primed = false
 
-    private(set) var underruns = 0
-    private(set) var overruns = 0
+    public private(set) var underruns = 0
+    public private(set) var overruns = 0
 
     // --- adaptive shrink (docs/MAC_APP.md §1) ---
     //
@@ -48,7 +48,7 @@ final class JitterBuffer {
     private var framesSinceReview = 0
     private var framesSinceSplice = 0
     private var pendingDrop = 0
-    private(set) var trimmedFrames = 0
+    public private(set) var trimmedFrames = 0
 
     private let reviewInterval = 8000        // 0.5 s at 16 kHz
     private let spliceDropMax = 160          // 10 ms per splice: 2% time compression
@@ -56,14 +56,14 @@ final class JitterBuffer {
     private let fadeFrames = 64              // 4 ms cross-fade across the splice
     private let silenceThreshold: Float = 0.005
 
-    var bufferedFrames: Int {
+    public var bufferedFrames: Int {
         lock.lock(); defer { lock.unlock() }
         return count
     }
 
     /// The floor the buffer has settled on, in ms. Starts at the configured trough and
     /// grows each time it underruns, so it converges on the jitter this path actually has.
-    var learnedTroughMs: Double {
+    public var learnedTroughMs: Double {
         lock.lock(); defer { lock.unlock() }
         return Double(targetTroughFrames) / 16.0
     }
@@ -74,7 +74,7 @@ final class JitterBuffer {
     ///   - targetTroughFrames: the depth the buffer should fall to just before each burst
     ///     lands — a *starting guess only*. Every underrun raises it by 20 ms, so the
     ///     buffer converges on however much jitter this network and server actually impose.
-    init(capacityFrames: Int = 16000 * 2, primeFrames: Int = 2880, targetTroughFrames: Int = 640) {
+    public init(capacityFrames: Int = 16000 * 2, primeFrames: Int = 2880, targetTroughFrames: Int = 640) {
         self.storage = [Float](repeating: 0, count: capacityFrames)
         self.primeFrames = primeFrames
         self.targetTroughFrames = targetTroughFrames
@@ -82,7 +82,7 @@ final class JitterBuffer {
 
     /// Drop everything and re-prime. Used after an audio device reconfiguration, where the
     /// buffered audio is stale and the engines have restarted from scratch.
-    func reset() {
+    public func reset() {
         lock.lock(); defer { lock.unlock() }
         readIndex = 0
         count = 0
@@ -92,7 +92,7 @@ final class JitterBuffer {
         framesSinceReview = 0
     }
 
-    func write(_ pcm: [Float]) {
+    public func write(_ pcm: [Float]) {
         lock.lock(); defer { lock.unlock() }
         let capacity = storage.count
         if pcm.count > capacity { return }
@@ -115,7 +115,7 @@ final class JitterBuffer {
     }
 
     /// Fills `frames` samples. Called from the realtime render callback.
-    func render(into ptr: UnsafeMutablePointer<Float>, frames: Int) {
+    public func render(into ptr: UnsafeMutablePointer<Float>, frames: Int) {
         lock.lock(); defer { lock.unlock() }
 
         if !primed {

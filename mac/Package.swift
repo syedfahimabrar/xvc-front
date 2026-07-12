@@ -1,12 +1,15 @@
 // swift-tools-version: 5.9
 import PackageDescription
 
-// Phase 1: a headless CLI, no UI, no virtual mic. Deliberately zero dependencies —
-// AVFoundation and URLSession cover capture, resampling, playout and WebSocket.
+// XVCCore — the audio pipeline (capture, resample, jitter buffer, playout, WS client),
+// shared by the headless CLI (test harness) and the menu-bar app. Zero dependencies:
+// AVFoundation + URLSession cover everything.
 let package = Package(
-    name: "xvc-cli",
+    name: "XVCLiveMic",
     platforms: [.macOS(.v13)],
     targets: [
-        .executableTarget(name: "xvc-cli", path: "Sources/xvc-cli")
+        .target(name: "XVCCore", path: "Sources/XVCCore"),
+        .executableTarget(name: "xvc-cli", dependencies: ["XVCCore"], path: "Sources/xvc-cli"),
+        .executableTarget(name: "XVCLiveMic", dependencies: ["XVCCore"], path: "Sources/XVCLiveMic"),
     ]
 )

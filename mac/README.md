@@ -6,7 +6,8 @@ The Mac side. No ML here — it only moves audio.
 |---|---|---|
 | `xvc-cli` | 1 | headless latency prototype: mic → server → **headphones** |
 | `driver/` | 2 | build script for the "XVC Mic" virtual device (rebranded BlackHole) |
-| `XVCLiveMic` | 4 | SwiftUI menu-bar app — not written yet |
+| `XVCLiveMic` | 4 | the menu-bar app (`build-app.sh`) |
+| `XVCCore` | — | shared audio pipeline used by both the CLI and the app |
 
 ## Running the Phase-1 prototype
 
@@ -58,6 +59,27 @@ See `docs/BENCHMARKS.md`.
 the excess would otherwise be permanent latency. `JitterBuffer` watches the low-water mark
 and splices out unused depth with a cross-fade.
 
+## The menu-bar app (Phase 4)
+
+```bash
+cd mac
+./build-app.sh run          # build build/"XVC Live Mic.app" and launch it
+```
+
+A menu-bar-only app (no Dock icon). The mic icon shows state: outline = passthrough
+(your real voice), filled+accent = converting, triangle = error. **Left-click toggles
+Convert; right-click opens the menu** (target picker, Server settings, quit) — the toggle
+must be one click mid-call (docs/MAC_APP.md §3.1).
+
+First run: click the icon → **Server settings** (host, port, token, "trust self-signed"),
+then **Add voice…** (pick a target WAV). Then left-click to Convert ON. In the meeting app,
+select **XVC Mic** as the microphone. Convert OFF passes your real voice through to XVC Mic
+so you never have to switch devices mid-call.
+
+Ad-hoc signed; macOS will prompt for microphone access on first capture. Distribution
+(Developer ID + notarization + `.pkg` installer bundling the driver) is the remaining
+Phase-4 work.
+
 ## The XVC Mic virtual device (Phase 2)
 
 ```bash
@@ -95,6 +117,14 @@ Sources/xvc-cli/
   XVCClient.swift      # load-target upload, WebSocket, TLS override
   LatencyTracker.swift # sample-count bookkeeping (PERFORMANCE.md §5)
   AudioDevices.swift   # enumerate/select CoreAudio devices by name
+Sources/XVCCore/       # ^ the above five, shared as a library
+Sources/XVCLiveMic/    # the menu-bar app
+  main.swift           # LSUIElement app entry
+  Engine.swift         # passthrough <-> converting, connection lifecycle, reconnect
+  StatusItemController.swift  # menu-bar item: left-click toggle, right-click menu
+  SettingsWindow.swift # server + mic settings (SwiftUI)
+  AppSettings.swift    # persisted config (UserDefaults)
+build-app.sh           # assemble + sign the .app bundle
 driver/
   build.sh             # clone + rebrand + verify + install the virtual device
   xvcmic_names.h       # the rebrand constants, injected with clang -include

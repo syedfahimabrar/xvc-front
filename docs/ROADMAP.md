@@ -108,9 +108,18 @@ does not survive reboot); real TLS if the box ever gets a hostname.
 **Exit gate:** Phase-1 latency gate passes against the dedicated server from the
 user's normal network.
 
-## Phase 4 — Product polish
+## Phase 4 — Product polish — menu-bar app built, installer pending
 
 **Goal:** one-download install for non-technical users.
+
+**Status:** `mac/XVCLiveMic` is a working menu-bar app (`build-app.sh`). Shares the audio
+pipeline with the CLI via the new `XVCCore` library. Has: status-bar mic icon with state
+(passthrough/connecting/converting/error), one-click Convert toggle (left-click) with
+right-click menu (§3.1), target-voice picker + "Add voice…", Server settings window
+(host/token/trust/mic), passthrough when OFF, auto-reconnect with target re-upload, and a
+capture level feeding the icon. Launches, renders the status item, captures the mic.
+**Remaining:** live end-to-end test through the app UI; the global hotkey; the `.pkg`
+installer (app + driver + coreaudiod bounce); Developer ID signing + notarization.
 
 - Menu-bar UI per MAC_APP.md §3 (target picker, toggle, latency readout, failure
   behaviors §4).

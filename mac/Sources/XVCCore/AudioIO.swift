@@ -10,14 +10,14 @@ import AVFoundation
 ///
 /// So `captureEngine` stays on the default input device and `playoutEngine` owns the output
 /// device. This is what docs/MAC_APP.md §1 prescribes.
-final class AudioIO {
-    private(set) var captureEngine = AVAudioEngine()
-    private(set) var playoutEngine = AVAudioEngine()
-    let jitter: JitterBuffer
+public final class AudioIO {
+    public private(set) var captureEngine = AVAudioEngine()
+    public private(set) var playoutEngine = AVAudioEngine()
+    public let jitter: JitterBuffer
 
     /// Called on the capture thread with 16 kHz mono PCM and the time the audio was
     /// captured (end of buffer, mach timebase).
-    var onCapturedChunk: (([Float], Double) -> Void)?
+    public var onCapturedChunk: (([Float], Double) -> Void)?
 
     private let vcFormat = AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1)!
     private var converter: AVAudioConverter?
@@ -30,15 +30,15 @@ final class AudioIO {
     private let inputDevice: AudioDevices.Device?
 
     /// Fired when CoreAudio reconfigured underneath us and we rebuilt. Callers re-prime.
-    var onReconfigured: ((String) -> Void)?
+    public var onReconfigured: ((String) -> Void)?
     private var observers: [NSObjectProtocol] = []
     private var isRebuilding = false
     private var rebuildScheduled = false
-    private(set) var rebuildCount = 0
+    public private(set) var rebuildCount = 0
 
     /// Seconds of audio between the socket and the ear: what's queued in the jitter buffer
     /// plus what the output hardware holds. Used to turn "arrived" into "heard".
-    var pendingPlayout: Double {
+    public var pendingPlayout: Double {
         Double(jitter.bufferedFrames) / 16000.0 + playoutEngine.outputNode.presentationLatency
     }
 
@@ -52,7 +52,7 @@ final class AudioIO {
     ///   - outputDevice: where to render the converted voice. nil = default output
     ///     (headphones, Phase 1). Pass "XVC Mic" for Phase 2: what we render to its output
     ///     side appears at its input side, which meeting apps read.
-    init(jitter: JitterBuffer,
+    public init(jitter: JitterBuffer,
          deviceBufferFrames: Int? = nil,
          mute: Bool = false,
          outputDevice: AudioDevices.Device? = nil,
@@ -66,14 +66,14 @@ final class AudioIO {
 
     /// What the engines actually ended up bound to. Always report these: the loopback bug
     /// above was invisible precisely because nothing printed the input device.
-    var inputDeviceName: String {
+    public var inputDeviceName: String {
         AudioDevices.currentDevice(of: captureEngine.inputNode.audioUnit)?.name ?? "default"
     }
-    var outputDeviceName: String {
+    public var outputDeviceName: String {
         AudioDevices.currentDevice(of: playoutEngine.outputNode.audioUnit)?.name ?? "default"
     }
 
-    func start() throws {
+    public func start() throws {
         // The initial engine.start() posts its own configuration change, which would arrive
         // just after we register observers and trigger a pointless rebuild on every launch
         // (observed: "#1" at startup, 2.4 s latency spike, ~10 s to recover). Swallow it the
@@ -88,7 +88,7 @@ final class AudioIO {
         }
     }
 
-    func stop() {
+    public func stop() {
         watchdog?.cancel()
         watchdog = nil
         observers.forEach { NotificationCenter.default.removeObserver($0) }
@@ -397,8 +397,8 @@ final class AudioIO {
     }
 }
 
-struct XVCError: LocalizedError {
-    let message: String
-    init(_ message: String) { self.message = message }
-    var errorDescription: String? { message }
+public struct XVCError: LocalizedError {
+    public let message: String
+    public init(_ message: String) { self.message = message }
+    public var errorDescription: String? { message }
 }
