@@ -7,30 +7,35 @@ signed and loads normally on current macOS.
 
 ## Install
 
-Because the installer isn't signed, macOS Gatekeeper blocks a downloaded `.pkg`. On
-**macOS 15 (Sequoia)** the block shows only **Done / Move to Trash**, and the usual
-"Open Anyway" button in Privacy & Security often does **not** appear for installer
-packages. The reliable route is to clear the "downloaded" flag first:
+Because the installer isn't signed (that needs a paid Apple Developer account), a
+*downloaded* `.pkg` is blocked by macOS Gatekeeper and — on macOS 15 (Sequoia) — has no
+reliable click-through override. The easiest reliable install is one line in Terminal.
 
-1. **Download** `XVCLiveMic-<version>.pkg` (note where it saved, e.g. `~/Downloads`).
-2. Open **Terminal** (Applications → Utilities) and run — adjust the path to where the pkg
-   is — to remove the download flag:
+### Easy way — one command
+
+Open **Terminal** (Spotlight → type "Terminal") and paste this, then press Return:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/syedfahimabrar/xvc-front/main/mac/installer/install.sh | bash
+```
+
+It downloads the installer, gets it past Gatekeeper, and installs the app + the "XVC Mic"
+audio device. Enter your Mac password when asked (it's needed to add the audio device).
+That's it — the mic icon appears in your menu bar.
+
+*(A script run this way is not subject to the block that stops the double-click — the same
+mechanism Homebrew's installer uses. A signed build would remove even this one line.)*
+
+### Manual way — if you'd rather not use the one-liner
+
+1. **Download** `XVCLiveMic.pkg` (note where it saved, e.g. `~/Downloads`).
+2. In **Terminal**, clear the download flag so Gatekeeper lets it install:
    ```bash
-   xattr -dr com.apple.quarantine ~/Downloads/XVCLiveMic-*.pkg
+   xattr -dr com.apple.quarantine ~/Downloads/XVCLiveMic*.pkg
    ```
-3. Now **double-click the pkg** — it opens normally, no Gatekeeper warning.
-4. Click through the installer and **enter your admin password** when asked — it needs it
-   to place the "XVC Mic" audio driver in `/Library/Audio/Plug-Ins/HAL/` and restart
-   CoreAudio (all audio blips for a second; normal, every audio app does it).
-5. Done. **XVC Live Mic** is in `/Applications` and its mic icon is in the menu bar.
-
-> One command in step 2 is the price of an unsigned installer on current macOS. A signed,
-> notarized build (needs a paid Apple Developer account) removes it — plain double-click,
-> no Terminal. Until then, the command above is safe and standard.
-
-Prefer no Terminal at all? An admin can also install headless:
-`sudo installer -pkg XVCLiveMic-*.pkg -target /` (the command-line installer skips the
-Gatekeeper GUI entirely).
+3. **Double-click the pkg** — it now opens normally. Click through and enter your admin
+   password when asked.
+4. Done. **XVC Live Mic** is in `/Applications`, mic icon in the menu bar.
 
 ## First use
 

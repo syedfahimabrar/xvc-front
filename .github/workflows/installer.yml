@@ -69,14 +69,21 @@ jobs:
           cd mac/installer
           ./build-pkg.sh
 
+      - name: Stable-named copy for the one-line installer
+        run: cp mac/installer/build/*.pkg mac/installer/build/XVCLiveMic.pkg
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: XVCLiveMic-installer
-          path: mac/installer/build/*.pkg
+          path: mac/installer/build/XVCLiveMic.pkg
 
       - name: Attach to release
         if: github.ref_type == 'tag'
+        # install.sh fetches releases/latest/download/XVCLiveMic.pkg, so the stable name
+        # must be a release asset (alongside the versioned one).
         uses: softprops/action-gh-release@v2
         with:
-          files: mac/installer/build/*.pkg
+          files: |
+            mac/installer/build/XVCLiveMic-*.pkg
+            mac/installer/build/XVCLiveMic.pkg
