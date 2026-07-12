@@ -7,15 +7,30 @@ signed and loads normally on current macOS.
 
 ## Install
 
-1. **Download** `XVCLiveMic-<version>.pkg`.
-2. **Right-click it → Open** (a plain double-click is blocked with *"unidentified
-   developer"* — right-click → Open gets past it). Click **Open** again to confirm.
-   - On newer macOS you may instead see the block, then go to **System Settings → Privacy
-     & Security**, scroll down, and click **Open Anyway**.
-3. The installer runs. **Enter your admin password** when asked — it needs it to place the
-   "XVC Mic" audio driver in `/Library/Audio/Plug-Ins/HAL/` and restart CoreAudio (all
-   audio blips for a second; this is normal, every audio app does it).
-4. Done. **XVC Live Mic** is in `/Applications` and its mic icon is in the menu bar.
+Because the installer isn't signed, macOS Gatekeeper blocks a downloaded `.pkg`. On
+**macOS 15 (Sequoia)** the block shows only **Done / Move to Trash**, and the usual
+"Open Anyway" button in Privacy & Security often does **not** appear for installer
+packages. The reliable route is to clear the "downloaded" flag first:
+
+1. **Download** `XVCLiveMic-<version>.pkg` (note where it saved, e.g. `~/Downloads`).
+2. Open **Terminal** (Applications → Utilities) and run — adjust the path to where the pkg
+   is — to remove the download flag:
+   ```bash
+   xattr -dr com.apple.quarantine ~/Downloads/XVCLiveMic-*.pkg
+   ```
+3. Now **double-click the pkg** — it opens normally, no Gatekeeper warning.
+4. Click through the installer and **enter your admin password** when asked — it needs it
+   to place the "XVC Mic" audio driver in `/Library/Audio/Plug-Ins/HAL/` and restart
+   CoreAudio (all audio blips for a second; normal, every audio app does it).
+5. Done. **XVC Live Mic** is in `/Applications` and its mic icon is in the menu bar.
+
+> One command in step 2 is the price of an unsigned installer on current macOS. A signed,
+> notarized build (needs a paid Apple Developer account) removes it — plain double-click,
+> no Terminal. Until then, the command above is safe and standard.
+
+Prefer no Terminal at all? An admin can also install headless:
+`sudo installer -pkg XVCLiveMic-*.pkg -target /` (the command-line installer skips the
+Gatekeeper GUI entirely).
 
 ## First use
 
