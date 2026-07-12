@@ -61,6 +61,9 @@ and splices out unused depth with a cross-fade.
 
 ## The menu-bar app (Phase 4)
 
+End-user install instructions (unsigned pkg): see [`INSTALL.md`](../INSTALL.md).
+
+
 ```bash
 cd mac
 ./build-app.sh run          # build build/"XVC Live Mic.app" and launch it
