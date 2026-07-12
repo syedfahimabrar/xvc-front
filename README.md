@@ -211,6 +211,14 @@ your meeting app. **Right-click** opens the full menu (target picker, settings, 
 > Keep your normal speakers/headphones as your *output*. Never select XVC Mic as your
 > speaker, or you won't hear the other people.
 
+### Uninstall
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/syedfahimabrar/xvc-front/main/mac/installer/uninstall.sh)
+```
+
+Removes the app, the XVC Mic device, and its saved settings.
+
 ---
 
 ## Building from source
