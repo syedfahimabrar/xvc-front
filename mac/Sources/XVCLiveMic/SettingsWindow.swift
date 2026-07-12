@@ -6,7 +6,7 @@ import XVCCore
 /// capture from. A small SwiftUI form hosted in a plain window.
 enum SettingsWindow {
     @MainActor
-    static func make(settings: AppSettings) -> NSWindow {
+    static func make(settings: AppSettings, onSave: @escaping () -> Void = {}) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 340),
             styleMask: [.titled, .closable],
@@ -14,13 +14,14 @@ enum SettingsWindow {
         window.title = "XVC Live Mic — Server"
         window.center()
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: SettingsView(settings: settings))
+        window.contentView = NSHostingView(rootView: SettingsView(settings: settings, onSave: onSave))
         return window
     }
 }
 
 private struct SettingsView: View {
     let settings: AppSettings
+    let onSave: () -> Void
 
     @State private var host: String
     @State private var port: String
@@ -30,8 +31,9 @@ private struct SettingsView: View {
 
     private let inputs: [String]
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, onSave: @escaping () -> Void = {}) {
         self.settings = settings
+        self.onSave = onSave
         _host = State(initialValue: settings.host)
         _port = State(initialValue: String(settings.port))
         _token = State(initialValue: settings.token)
@@ -78,5 +80,6 @@ private struct SettingsView: View {
         settings.token = token.trimmingCharacters(in: .whitespaces)
         settings.trustSelfSigned = trust
         settings.inputDeviceName = inputDevice
+        onSave()
     }
 }
