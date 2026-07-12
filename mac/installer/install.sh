@@ -35,5 +35,19 @@ xattr -dr com.apple.quarantine "$TMP/$ASSET" 2>/dev/null || true
 say "Installing (you'll be asked for your password — it's needed to add the audio device)…"
 sudo installer -pkg "$TMP/$ASSET" -target /
 
-say "Done. Look for the microphone icon in your menu bar."
-say "Open it → Server settings to configure, then pick \"XVC Mic\" as your mic in Zoom/Meet."
+# The pkg only lays the app down; launch it so the menu-bar icon actually appears. (This
+# runs as you, not root — `sudo` above was scoped to the installer command alone.)
+say "Starting XVC Live Mic…"
+open -a "/Applications/XVC Live Mic.app" || true
+
+cat <<'EOF'
+
+  XVC Live Mic is installed and running — look for the microphone icon in your menu bar.
+
+  Next:
+    1. Click the icon → Server settings, and enter the server address, port and token.
+    2. Click the icon → Add voice…, and choose a target-voice .wav file.
+    3. Left-click the icon to turn Convert ON (allow microphone access when asked).
+    4. In Zoom / Google Meet / Teams, pick "XVC Mic" as your microphone.
+
+EOF

@@ -167,9 +167,12 @@ Open **Terminal** and run:
 curl -fsSL https://raw.githubusercontent.com/syedfahimabrar/xvc-front/main/mac/installer/install.sh | bash
 ```
 
-This downloads the installer, installs **XVC Live Mic** into `/Applications`, and installs
-the **XVC Mic** audio device (you'll be asked for your Mac password — it's needed to add a
-system audio device). When it finishes, a microphone icon appears in your menu bar.
+This downloads the installer, installs **XVC Live Mic** into `/Applications`, installs the
+**XVC Mic** audio device (you'll be asked for your Mac password — it's needed to add a
+system audio device), and starts the app. A microphone icon appears in your menu bar.
+
+The app is a menu-bar app with no Dock icon — the menu-bar microphone icon *is* the app. If
+you ever quit it, reopen it from `/Applications`.
 
 <details>
 <summary>Prefer to install manually?</summary>
