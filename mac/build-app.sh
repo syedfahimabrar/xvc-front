@@ -40,6 +40,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSMicrophoneUsageDescription</key>
     <string>XVC Live Mic captures your microphone so it can stream your converted voice into the XVC Mic device.</string>
     <key>NSHighResolutionCapable</key>   <true/>
+    <!-- Dev only: the KTH/self-signed server has no CA-chained cert, and ATS (enforced for
+         apps, unlike the bare CLI) would reject it before our URLSessionDelegate trust
+         override runs. A real hostname with Let's Encrypt needs neither this nor
+         "trust self-signed" — remove this for a production build. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key> <true/>
+    </dict>
 </dict>
 </plist>
 PLIST

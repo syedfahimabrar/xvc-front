@@ -13,6 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Bring the pipeline up in passthrough immediately so "XVC Mic" is never a dead
         // device once the app is running (docs/MAC_APP.md §4).
         engine.start()
+        // Debug: auto-toggle Convert on launch so the connection path can be driven from a
+        // terminal run without clicking the menu bar.
+        if ProcessInfo.processInfo.environment["XVC_AUTOCONVERT"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [engine] in engine.setConvert(true) }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

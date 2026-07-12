@@ -22,9 +22,16 @@ final class Engine: ObservableObject {
         case error(String)
     }
 
-    @Published private(set) var state: State = .idle
+    @Published private(set) var state: State = .idle {
+        didSet { log("state -> \(state)") }
+    }
     @Published private(set) var inputLevel: Float = 0     // 0…1 peak, decays
     @Published private(set) var latencyMs: Double = 0
+
+    private func log(_ s: String) {
+        FileHandle.standardError.write("[engine] \(s)\n".data(using: .utf8)!)
+    }
+    private var capturedChunks = 0
 
     private let settings: AppSettings
     private var audio: AudioIO?
@@ -61,7 +68,9 @@ final class Engine: ObservableObject {
             audio = io
             setConverting(false)
             state = .passthrough
+            log("started: in=\(io.inputDeviceName) out=\(io.outputDeviceName)")
         } catch {
+            log("start failed: \(error)")
             state = .error(error.localizedDescription)
         }
     }
@@ -136,6 +145,7 @@ final class Engine: ObservableObject {
 
     private func attemptConnect(host: String, port: Int, token: String,
                                 trust: Bool, target: TargetVoice) async throws {
+        log("connecting host=\(host):\(port) trust=\(trust) token=\(token.isEmpty ? "none" : "set")")
         let client = XVCClient(host: host, port: port, allowSelfSigned: trust, token: token)
         self.client = client
 
@@ -143,17 +153,21 @@ final class Engine: ObservableObject {
         // server restart, so a stale one yields "Unknown target_id" and we re-upload.
         var targetID = target.targetID
         if targetID == nil {
+            log("uploading target \(target.name) …")
             targetID = try await uploadTarget(client, target)
+            log("target uploaded: \(targetID!)")
         }
 
         let task: URLSessionWebSocketTask
         do {
+            log("opening stream with \(targetID!) …")
             task = try await client.openStream(targetID: targetID!, sourceRate: 16000)
         } catch {
-            // Most likely a dead handle after a server restart — re-upload once and retry.
+            log("openStream failed (\(error)); re-uploading target and retrying")
             targetID = try await uploadTarget(client, target)
             task = try await client.openStream(targetID: targetID!, sourceRate: 16000)
         }
+        log("stream ready")
         guard convertRequested, !Task.isCancelled else { task.cancel(with: .normalClosure, reason: nil); return }
 
         socket = task
@@ -204,6 +218,13 @@ final class Engine: ObservableObject {
         var peak: Float = 0
         for s in pcm { peak = max(peak, abs(s)) }
         Task { @MainActor in self.inputLevel = max(peak, self.inputLevel * 0.6) }
+
+        capturedChunks += 1
+        if capturedChunks % 100 == 1 {   // ~1/s at 11ms chunks
+            modeLock.lock(); let c = _converting; modeLock.unlock()
+            log(String(format: "capture #%d peak=%.3f mode=%@ socket=%@",
+                       capturedChunks, peak, c ? "convert" : "passthru", socket == nil ? "nil" : "open"))
+        }
 
         modeLock.lock(); let converting = _converting; modeLock.unlock()
         if converting, let task = socket {
