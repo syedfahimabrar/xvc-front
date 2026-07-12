@@ -47,10 +47,26 @@ if [ ! -f "$TOKEN_FILE" ]; then
 fi
 TOKEN="$(cat "$TOKEN_FILE")"
 
-# systemd unit. The server must run with the X-VC repo as cwd (relative pretrained/ paths).
-UNIT=/etc/systemd/system/xvc-server.service
-echo "[setup] writing $UNIT ..."
-sudo tee "$UNIT" >/dev/null <<UNIT
+# Launch mechanism. systemd needs root; many GPU boxes are rootless (shared, or a
+# container). Write a plain launch script always, and install a systemd unit only if we
+# actually have sudo. The server must run with the X-VC repo as cwd (relative pretrained/).
+UV="$(command -v uv || echo "$HOME/.local/bin/uv")"
+LAUNCH="$HOME/xvc-run.sh"
+cat > "$LAUNCH" <<LAUNCH
+#!/usr/bin/env bash
+# Start the XVC server. Env chosen by setup.sh; tuning per docs/BENCHMARKS.md.
+cd "$XVC_DIR" || exit 1
+export XVC_DIR="$XVC_DIR" SSL_DIR="$SSL_DIR" MEANVC_PORT=$PORT
+export XVC_AUTH_TOKEN="\$(cat "$TOKEN_FILE")"
+export XVC_CHUNK_MS=\${XVC_CHUNK_MS:-2400} XVC_CURRENT_MS=\${XVC_CURRENT_MS:-120}
+exec "$UV" run --project "$SERVER_DIR" python "$SERVER_DIR/xvc_server.py"
+LAUNCH
+chmod +x "$LAUNCH"
+
+if sudo -n true 2>/dev/null; then
+    UNIT=/etc/systemd/system/xvc-server.service
+    echo "[setup] sudo available — installing systemd unit $UNIT ..."
+    sudo tee "$UNIT" >/dev/null <<UNIT
 [Unit]
 Description=XVC Live Mic streaming server
 After=network-online.target
@@ -60,22 +76,20 @@ Wants=network-online.target
 Type=simple
 User=$USER
 WorkingDirectory=$XVC_DIR
-Environment=XVC_DIR=$XVC_DIR
-Environment=SSL_DIR=$SSL_DIR
-Environment=MEANVC_PORT=$PORT
-Environment=XVC_AUTH_TOKEN=$TOKEN
-# Tuning levers (docs/PERFORMANCE.md §3) — defaults chosen in docs/BENCHMARKS.md.
-Environment=XVC_CHUNK_MS=2400
-Environment=XVC_CURRENT_MS=120
-ExecStart=$(command -v uv) run --project $SERVER_DIR python $SERVER_DIR/xvc_server.py
+EnvironmentFile=-$HOME/xvc.env
+ExecStart=$LAUNCH
 Restart=on-failure
 RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
 UNIT
-sudo systemctl daemon-reload
-echo "[setup] enable + start with:  sudo systemctl enable --now xvc-server"
+    sudo systemctl daemon-reload
+    LAUNCH_HINT="sudo systemctl enable --now xvc-server   # survives reboot"
+else
+    echo "[setup] no sudo — skipping systemd. Run the server yourself (no root needed):"
+    LAUNCH_HINT="nohup $LAUNCH > ~/xvc-server.log 2>&1 &   # then: tail -f ~/xvc-server.log"
+fi
 
 # 7. Phase-0 benchmark on this box, so tuning decisions are made from its numbers.
 echo
@@ -91,8 +105,8 @@ cat <<EOF
   Auth token  : $TOKEN_FILE  (give this to the Mac client as XVC_TOKEN)
   TLS         : $SSL_DIR/cert.pem
 
-  Start it:   sudo systemctl enable --now xvc-server
-  Watch logs: journalctl -u xvc-server -f   (wait for "[xvc] warmed up")
+  Start it:   $LAUNCH_HINT
+  Wait for:   "[xvc] warmed up" in the log before connecting
 
   Point the Mac client at it:
     export XVC_HOST=${PUBLIC_HOST:-<ip>} XVC_TOKEN=\$(cat $TOKEN_FILE)

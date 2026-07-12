@@ -103,9 +103,40 @@ algorithmic look-ahead is a property of the model on any hardware. Local best ca
 **Consequence: the "X-VC never runs on the Mac" architecture decision is now backed by
 measurement, not assumption.** Revisit only if the model family changes.
 
-## Dedicated box (Phase 3)
+## Dedicated box (Phase 3) — RTX 3080 10 GB, 2026-07-12
 
-_Not yet provisioned. Re-run the sweep after `setup.sh` to confirm the settings above hold._
+Provisioned and running `server/xvc_server.py`. Same command, same GPU class as the
+top-of-file run; confirms nothing regressed and the box is clean.
+
+| chunk_ms | dtype | p50 ms | p95 ms | peak VRAM | load @ 120 ms | verdict |
+|----------|-------|--------|--------|-----------|---------------|-------------|
+| 2400 | fp32 | 32.6 | 32.7 | 2.5 GB | 0.27x | comfortable |
+| 2400 | bf16 | 35.3 | 35.4 | 2.7 GB | 0.29x | comfortable |
+| 1600 | fp32 | 29.5 | 29.7 | 2.4 GB | 0.25x | comfortable |
+| 1600 | bf16 | 33.6 | 33.8 | 2.7 GB | 0.28x | comfortable |
+
+Defaults hold. **End-to-end over the wire beats the shared KTH box**, which is the whole
+reason this box exists:
+
+| path | p50 | p95 | spread | cold start | outliers |
+|---|---|---|---|---|---|
+| shared KTH (3090 + PersonaPlex) | 198.8 ms | 204.4 ms | 6 ms | 2462 ms first frame | one 525 ms spike / 2 min |
+| **dedicated (3080, this box)** | **183.9 ms** | **186.3 ms** | 21 ms | **175 ms first frame** | none in 30 s |
+
+Two things confirmed in production:
+
+- **The startup warm-up works.** Server logged `warmed up in 2.1s`, and the first client
+  frame arrived at 175 ms — steady-state, not the 2462 ms cold start the shared box showed.
+  The ~2.4 s lazy-init is now paid once at boot, before anyone connects.
+- **The shared box's variance was contention, not the GPU.** The dedicated 3080 (slower
+  silicon than the 3090) is ~20 ms faster end to end and has zero outliers, exactly as
+  Phase 0 predicted. The 525 ms spikes were PersonaPlex sharing the GPU.
+
+Full Swift client (mic → wss with bearer token → speakers) against this box: p50 360 ms /
+p95 373 ms mic-to-ear, vs ~400–440 ms against KTH.
+
+**Phase-3 exit gate met:** Phase-1 latency gate (p95 < 500 ms, flat drift) passes against
+the dedicated server from the user's network — p95 186 ms wire, 373 ms full client.
 
 ---
 
