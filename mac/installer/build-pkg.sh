@@ -48,8 +48,27 @@ cp "$INST/postinstall" "$OUT/scripts/postinstall"
 chmod +x "$OUT/scripts/postinstall"
 
 # One component pkg for the whole payload, with the coreaudiod-bounce postinstall.
+#
+# Bundle relocation MUST be off. pkgbuild marks .app bundles relocatable by default, so at
+# install time macOS looks for an existing copy of the same bundle id anywhere on disk and
+# installs over THAT instead of /Applications. Observed: it found a developer build in the
+# source tree and installed there, leaving /Applications empty while still reporting
+# success. --analyze gives us the component plist; force BundleIsRelocatable=false in it.
 COMPONENT="$OUT/component.pkg"
+PLIST="$OUT/component.plist"
+pkgbuild --analyze --root "$ROOT" "$PLIST" >/dev/null
+python3 - "$PLIST" <<'PY'
+import plistlib, sys
+path = sys.argv[1]
+with open(path, "rb") as f:
+    comps = plistlib.load(f)
+for c in comps:
+    c["BundleIsRelocatable"] = False
+with open(path, "wb") as f:
+    plistlib.dump(comps, f)
+PY
 pkgbuild --root "$ROOT" \
+         --component-plist "$PLIST" \
          --identifier "$PKG_ID" \
          --version "$VERSION" \
          --scripts "$OUT/scripts" \
@@ -83,7 +102,7 @@ if [ -n "$NOTARY_PROFILE" ]; then
     xcrun stapler staple "$PKG"
 fi
 
-rm -rf "$ROOT" "$OUT/scripts" "$COMPONENT" "$DISTRIB"
+rm -rf "$ROOT" "$OUT/scripts" "$COMPONENT" "$DISTRIB" "$PLIST"
 echo "[pkg] built $PKG"
 [ -n "$INSTALLER_SIGN_ID" ] && echo "[pkg] signed$([ -n "$NOTARY_PROFILE" ] && echo " + notarized")" || \
     echo "[pkg] UNSIGNED — installs via right-click Open, or set APP_SIGN_ID/INSTALLER_SIGN_ID"
