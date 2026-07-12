@@ -1,6 +1,6 @@
 import Foundation
 
-/// Client for the two endpoints in docs/PROTOCOL.md: `load-target` and `stream`.
+/// Client for the two endpoints in the README: `load-target` and `stream`.
 public final class XVCClient: NSObject, URLSessionDelegate {
     private let host: String
     private let port: Int
@@ -43,7 +43,7 @@ public final class XVCClient: NSObject, URLSessionDelegate {
     }
 
     /// Opens the stream and waits for `{"status":"ready"}` before returning. Clients MUST
-    /// NOT send audio before that frame arrives (docs/PROTOCOL.md §2).
+    /// NOT send audio before that frame arrives (the README).
     public func openStream(targetID: String, sourceRate: Int) async throws -> URLSessionWebSocketTask {
         var components = URLComponents()
         components.scheme = "wss"
@@ -56,7 +56,7 @@ public final class XVCClient: NSObject, URLSessionDelegate {
             URLQueryItem(name: "steps", value: "2"),   // MeanVC only; X-VC ignores it
         ]
         // WS clients can't set request headers reliably, so the token rides in the query
-        // string (docs/PROTOCOL.md §3).
+        // string (the README).
         if !token.isEmpty { components.queryItems?.append(URLQueryItem(name: "token", value: token)) }
 
         let task = session.webSocketTask(with: components.url!)
@@ -77,7 +77,7 @@ public final class XVCClient: NSObject, URLSessionDelegate {
         return task
     }
 
-    /// Dev-only trust override for the KTH server's self-signed cert (docs/PROTOCOL.md §3).
+    /// Dev-only trust override for the KTH server's self-signed cert (the README).
     /// Gated behind --insecure and scoped to the one host we were pointed at; never ship a
     /// build where this can fire by default.
     public func urlSession(_ session: URLSession,

@@ -10,7 +10,7 @@ The number that decides the product:
 
 because the server must finish converting window i before window i+1's audio has
 accumulated. If it is even slightly over, delay grows for as long as the user keeps
-talking. See docs/PERFORMANCE.md §1.
+talking. See the README
 
 Per-window cost is set by CHUNK_MS (the fixed 2.4 s context the model runs over), not
 by CURRENT_MS. CURRENT_MS only decides how often a window runs. So we time each
@@ -150,7 +150,7 @@ def time_forward(model, win, spk, frame, dtype, iters: int, warmup: int) -> list
 
 
 def verdict(p95_ms: float, current_ms: int) -> str:
-    """docs/PERFORMANCE.md §4, generalized past the CURRENT_MS=120 default."""
+    """the README, generalized past the CURRENT_MS=120 default."""
     load = p95_ms / current_ms
     if load < 0.67:
         return "comfortable"
@@ -327,7 +327,7 @@ def main() -> int:
         else:
             print(f"\n=> Phase-0 gate PASSED: best p95 {best['p95_ms']:.1f} ms "
                   f"(chunk_ms={best['chunk_ms']}, {best['dtype']}).")
-        print("Record the table in docs/BENCHMARKS.md. Levers 2 and 3 change the audio: "
+        print("Record the table in the README. Levers 2 and 3 change the audio: "
               "confirm with --dump-wav before adopting.")
 
         if args.dump_wav:

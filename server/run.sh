@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Launch the XVC server with tunable streaming parameters (docs/PERFORMANCE.md §3,
-# docs/BACKEND.md §4). Override any of them via env — everything else has a safe default:
+# Launch the XVC server with tunable streaming parameters (the README,
+# the README). Override any of them via env — everything else has a safe default:
 #
-#   ./run.sh                        # defaults: CURRENT_MS=120 (balanced)
-#   XVC_CURRENT_MS=60  ./run.sh     # low latency  (~-82 ms end-to-end, ~2x GPU load)
-#   XVC_CURRENT_MS=240 ./run.sh     # low GPU load (~+120 ms latency, ~0.5x load)
+#   ./run.sh                        # defaults: CURRENT_MS=240 (smooth, low GPU load)
+#   XVC_CURRENT_MS=120 ./run.sh     # balanced
+#   XVC_CURRENT_MS=60  ./run.sh     # lowest latency (~2x GPU load)
 #   XVC_CHUNK_MS=1600  ./run.sh     # cheaper forward, quality risk — A/B by ear first
 #
 # Constraint (enforced by the server): CHUNK - CURRENT - SMOOTH - FUTURE >= 0.
@@ -18,7 +18,7 @@ export XVC_AUTH_TOKEN="${XVC_AUTH_TOKEN:-$(cat "$HOME/xvc-token" 2>/dev/null || 
 
 # --- the tunables ---
 export XVC_CHUNK_MS="${XVC_CHUNK_MS:-2400}"     # context window the model runs over
-export XVC_CURRENT_MS="${XVC_CURRENT_MS:-120}"  # emitted per window — the main latency lever
+export XVC_CURRENT_MS="${XVC_CURRENT_MS:-240}"  # emitted per window — the main latency lever
 export XVC_SMOOTH_MS="${XVC_SMOOTH_MS:-20}"     # cross-fade between windows
 export XVC_FUTURE_MS="${XVC_FUTURE_MS:-100}"    # look-ahead
 

@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 import XVCCore
 
-// Phase 1 (docs/ROADMAP.md): mic -> 16 kHz -> WebSocket -> jitter buffer -> HEADPHONES.
+// Phase 1 (the README): mic -> 16 kHz -> WebSocket -> jitter buffer -> HEADPHONES.
 // No virtual mic, no UI. The gate is p95 < 500 ms over 2 minutes with no growing drift.
 //
 // Wear headphones. Monitoring your converted voice on speakers feeds it back into the mic.
@@ -308,7 +308,7 @@ if let w = tracker.wireSummary(skip: 25) {
 }
 
 if s.drift * 1000 > 50 {
-    print("\n=> LATENCY IS GROWING. The server is falling behind real time. See PERFORMANCE.md §1.")
+    print("\n=> LATENCY IS GROWING. The server is falling behind real time. See the README")
     exit(1)
 } else if s.p95 * 1000 < 500 {
     print(String(format: "\n=> Phase-1 gate PASSED: p95 %.0f ms < 500 ms, drift flat.", s.p95 * 1000))

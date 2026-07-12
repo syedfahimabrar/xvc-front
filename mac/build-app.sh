@@ -7,7 +7,7 @@
 # The bundle carries the Info.plist the raw SPM executable can't: LSUIElement (menu-bar
 # only, no Dock icon) and NSMicrophoneUsageDescription (required for the mic TCC prompt).
 # Ad-hoc signed — enough to run locally and request mic access. Distribution needs a
-# Developer ID cert + notarization (docs/MAC_APP.md §2), and the .pkg installer (Phase 4).
+# Developer ID cert + notarization (the README), and the .pkg installer (Phase 4).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

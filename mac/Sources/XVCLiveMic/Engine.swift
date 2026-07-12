@@ -10,7 +10,7 @@ import XVCCore
 ///   converting  — mic → server → XVC Mic (Convert ON)
 ///
 /// Both feed the one jitter buffer, so the output device never sees a gap when we flip
-/// modes (docs/MAC_APP.md §3, §3.1). Callbacks come off audio/network threads; UI state is
+/// modes (the README). Callbacks come off audio/network threads; UI state is
 /// published on the main actor.
 @MainActor
 final class Engine: ObservableObject {

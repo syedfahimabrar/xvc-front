@@ -1,7 +1,7 @@
 import AVFoundation
 import Foundation
 
-/// Mic-to-ear latency by sample-count bookkeeping (docs/PERFORMANCE.md §5).
+/// Mic-to-ear latency by sample-count bookkeeping (the README).
 ///
 /// The stream has no frame IDs, but output sample k corresponds to input sample k: the
 /// server emits each window's "current" region in order. So we remember when each sent
@@ -69,7 +69,7 @@ public final class LatencyTracker {
     }
 
     /// Overall stats plus drift: median of the last third minus the first third. A rising
-    /// number is the failure mode from PERFORMANCE.md §1 — the server falling behind a
+    /// number is the failure mode from the README — the server falling behind a
     /// little on every window, so delay grows for as long as someone talks.
     public func summary(skip: Int = 0) -> (p50: Double, p95: Double, min: Double, max: Double, drift: Double, count: Int)? {
         lock.lock(); defer { lock.unlock() }

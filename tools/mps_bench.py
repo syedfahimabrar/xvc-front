@@ -109,7 +109,7 @@ def main() -> int:
         print("=> could keep up in real time on this Mac")
     else:
         print(f"=> CANNOT keep up: delay would grow ~{(p95/args.current_ms - 1)*1000:.0f} ms "
-              f"per second of speech (see docs/PERFORMANCE.md §1)")
+              f"per second of speech (see the README)")
     return 0
 
 

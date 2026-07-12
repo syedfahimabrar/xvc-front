@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Synthetic streaming client: feed a WAV at real-time pace, measure latency and drift.
 
-The test docs/PERFORMANCE.md §4 asks for ("send a WAV at real-time pace, assert output
+The test the README asks for ("send a WAV at real-time pace, assert output
 cadence keeps up and total drift stays ~0"), and the reference implementation of the
-sample-count bookkeeping the Swift client needs (§5).
+sample-count bookkeeping the Swift client needs.
 
 Latency bookkeeping: the stream carries no frame IDs, but output sample k corresponds to
 input sample k (the server emits the "current" region of each window in order). So we
@@ -14,7 +14,7 @@ k was sent. That difference is mic-to-ear latency minus the audio hardware at bo
         --target-wav target.wav --source-wav source.wav --out converted.wav
 
 Dev only: this disables TLS verification, because the dev server has a self-signed cert
-(docs/PROTOCOL.md §3). Never do this in the shipped app.
+(the README). Never do this in the shipped app.
 """
 import argparse
 import asyncio
@@ -106,7 +106,7 @@ async def run(args) -> int:
             ssl_ctx.verify_mode = ssl.CERT_NONE
 
     # WS clients can't set request headers reliably, so the token rides in the query
-    # string (docs/PROTOCOL.md §3).
+    # string (the README).
     token_qs = f"&token={args.token}" if args.token else ""
     url = f"{scheme_ws}://{args.host}:{args.port}/api/meanvc/stream?target_id={target_id}&source_sr={SR}&steps=2{token_qs}"
     chunk = args.chunk_ms * SR // 1000
@@ -126,7 +126,7 @@ async def run(args) -> int:
             out_count = 0
             async for msg in ws:
                 if isinstance(msg, str):
-                    print(f"[probe] server said: {msg}")   # {"error": ...} is fatal per PROTOCOL.md
+                    print(f"[probe] server said: {msg}")   # {"error": ...} is fatal per the README
                     break
                 now = time.monotonic()
                 pcm = np.frombuffer(msg, dtype="<f4")
@@ -198,7 +198,7 @@ async def run(args) -> int:
 
     if drift > 50:
         print("\n=> LATENCY IS GROWING. The server is falling behind real time; delay will")
-        print("   keep climbing for as long as someone talks. See PERFORMANCE.md §1.")
+        print("   keep climbing for as long as someone talks. See the README")
     elif p95 < 500:
         print(f"\n=> Phase-1 gate PASSED on this path: p95 {p95:.0f} ms < 500 ms, drift flat.")
     else:

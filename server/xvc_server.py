@@ -4,20 +4,20 @@
 A trimmed copy of docs/reference/hearmeout-xvc-server.py: keeps `load-target` + `stream`,
 drops `chat-proxy` (and with it sphn/Opus + PersonaPlex), adds bearer-token auth and a
 startup warm-up. The streaming window math is copied verbatim from the reference — it is
-proven, do not reinvent it (docs/BACKEND.md §5).
+proven, do not reinvent it (the README).
 
-Two endpoints (docs/PROTOCOL.md):
+Two endpoints (the README):
     POST /api/meanvc/load-target   register a target voice, precompute conditions
     GET  /api/meanvc/stream        WebSocket: raw float32 PCM in -> converted PCM out
 
-Auth (docs/PROTOCOL.md §3): if XVC_AUTH_TOKEN is set, load-target requires
+Auth (the README): if XVC_AUTH_TOKEN is set, load-target requires
 `Authorization: Bearer <token>` and stream requires `?token=<token>` (browsers/URLSession
 can't set WS headers reliably). If it is unset the server runs OPEN and says so loudly —
 acceptable for a firewalled dev box, never for anything reachable.
 
 Env: XVC_DIR, XVC_CONFIG, XVC_CKPT, XVC_DEVICE, XVC_EMA_LOAD,
 XVC_CHUNK_MS/CURRENT_MS/SMOOTH_MS/FUTURE_MS, MEANVC_PORT, SSL_DIR, XVC_AUTH_TOKEN.
-See docs/BACKEND.md §4.
+See the README
 """
 import asyncio
 import hmac
@@ -53,7 +53,7 @@ XVC_DEVICE = int(os.environ.get("XVC_DEVICE", 0))
 XVC_EMA_LOAD = os.environ.get("XVC_EMA_LOAD", "1") not in ("0", "false", "False")
 
 CHUNK_MS = int(os.environ.get("XVC_CHUNK_MS", 2400))
-CURRENT_MS = int(os.environ.get("XVC_CURRENT_MS", 120))
+CURRENT_MS = int(os.environ.get("XVC_CURRENT_MS", 240))
 SMOOTH_MS = int(os.environ.get("XVC_SMOOTH_MS", 20))
 FUTURE_MS = int(os.environ.get("XVC_FUTURE_MS", 100))
 
@@ -84,7 +84,7 @@ class XVCStreamSession:
     Mirrors bins.infer_utils.run_streaming exactly, but pulls each window from a growing
     buffer (live mic) instead of a complete source array. Per-window work is stateless
     except the overlap cross-fade tail_buffer. Copied verbatim from the reference server —
-    docs/BACKEND.md §5 says port this, do not reinvent it.
+    the README says port this, do not reinvent it.
     """
 
     def __init__(self, speaker_condition, frame_condition):
@@ -214,7 +214,7 @@ async def handle_stream(request: web.Request) -> web.StreamResponse:
     """GET /api/meanvc/stream - WebSocket: raw float32 PCM in, converted PCM out."""
     # Auth is checked BEFORE the WebSocket handshake: a bad token gets a plain HTTP 401,
     # which URLSession/browsers surface as a failed upgrade. Tokens travel in the query
-    # string because WS clients can't set request headers reliably (docs/PROTOCOL.md §3).
+    # string because WS clients can't set request headers reliably (the README).
     if not _token_ok(request.query.get("token", "")):
         return web.json_response({"error": "unauthorized"}, status=401)
 
@@ -239,7 +239,7 @@ async def handle_stream(request: web.Request) -> web.StreamResponse:
             if resampler is not None:
                 incoming = resampler(torch.from_numpy(incoming).unsqueeze(0)).squeeze(0).numpy()
             # GPU work runs in a thread executor so the event loop keeps serving frames
-            # (docs/BACKEND.md §5) — keep this pattern.
+            # (the README) — keep this pattern.
             curs = await loop.run_in_executor(None, session.feed, incoming)
             for cur in curs:
                 if not ws.closed:
@@ -261,7 +261,7 @@ def _warmup() -> None:
     """Run the full pipeline once before serving.
 
     The first forward of a fresh process pays ~2.4 s of lazy CUDA/cuDNN + GLM-tokenizer
-    init (measured, docs/BENCHMARKS.md). Without this the first real user hears mangled
+    init (measured, the README). Without this the first real user hears mangled
     audio. Exercise the exact serving path: build conditions from noise, then run one
     conversion window.
     """

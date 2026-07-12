@@ -2,7 +2,7 @@
 # Phase-0 bootstrap: get a fresh GPU box to the point where bench.py can run.
 #
 # Idempotent — re-run it freely. This is steps 1-4 of the setup.sh described in
-# docs/BACKEND.md §7; the TLS certs, auth token and systemd unit come in Phase 3,
+# the README; the TLS certs, auth token and systemd unit come in Phase 3,
 # when there is a server to run.
 #
 #   XVC_DIR=~/X-VC ./bootstrap.sh

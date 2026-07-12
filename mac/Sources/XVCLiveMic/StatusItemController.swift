@@ -3,7 +3,7 @@ import Combine
 import XVCCore
 
 /// The menu-bar presence. Left click toggles Convert directly; right click opens the menu
-/// (docs/MAC_APP.md §3.1 — the toggle must be one click mid-call, never behind a menu).
+/// (the README — the toggle must be one click mid-call, never behind a menu).
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -60,7 +60,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // one is forced to the bar's black/white and ignores contentTintColor — which is why
         // the earlier tinted "converting" looked identical to passthrough. So: converting is
         // GREEN, passthrough/idle are plain monochrome. Green vs. mono is the at-a-glance cue
-        // that the far end hears the converted voice, not your real one (docs/MAC_APP.md §3.1).
+        // that the far end hears the converted voice, not your real one (the README).
         let (symbol, color, desc): (String, NSColor?, String)
         switch state {
         case .idle:        (symbol, color, desc) = ("mic.slash", nil, "XVC: off")

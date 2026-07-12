@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch X-VC's three model assets into $XVC_DIR. Idempotent — safe to re-run.
 
-Snippets are verbatim from docs/BACKEND.md §2 (the proven setup script).
+Snippets are verbatim from the README (the proven setup script).
 """
 import os
 import shutil

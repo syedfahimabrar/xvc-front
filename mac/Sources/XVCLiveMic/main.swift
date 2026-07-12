@@ -1,7 +1,7 @@
 import AppKit
 
 // Menu-bar app (LSUIElement in Info.plist = no Dock icon, no main window). The pipeline
-// lives in XVCCore, shared with the xvc-cli test harness. See docs/MAC_APP.md §3.
+// lives in XVCCore, shared with the xvc-cli test harness. See the README
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = AppSettings()
@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusController = StatusItemController(engine: engine, settings: settings)
         // Bring the pipeline up in passthrough immediately so "XVC Mic" is never a dead
-        // device once the app is running (docs/MAC_APP.md §4).
+        // device once the app is running (the README).
         engine.start()
         // Debug: auto-toggle Convert on launch so the connection path can be driven from a
         // terminal run without clicking the menu bar.

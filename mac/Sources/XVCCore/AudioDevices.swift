@@ -5,7 +5,7 @@ import CoreAudio
 ///
 /// Phase 2 renders the converted voice into the "XVC Mic" virtual device instead of the
 /// speakers. A virtual mic is an output like any other: whatever we render to its output
-/// side appears at its input side, which is what Zoom reads (docs/MAC_APP.md §2).
+/// side appears at its input side, which is what Zoom reads (the README).
 public enum AudioDevices {
     public struct Device {
         public let id: AudioDeviceID

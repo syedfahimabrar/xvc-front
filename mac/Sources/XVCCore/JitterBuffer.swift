@@ -6,7 +6,7 @@ import Foundation
 /// Priming is the whole point. If we start playing the instant the first burst lands, the
 /// next render callback almost certainly runs before the second burst arrives, and we
 /// glitch. So we wait until `primeFrames` are buffered, then play. On underrun we emit
-/// silence and re-prime rather than stuttering, per docs/MAC_APP.md §1.
+/// silence and re-prime rather than stuttering, per the README
 ///
 /// `render` is called on the realtime audio thread. NSLock is not strictly realtime-safe
 /// (it can block if the writer holds it), but the writer's critical section is a memcpy of
@@ -24,7 +24,7 @@ public final class JitterBuffer {
     public private(set) var underruns = 0
     public private(set) var overruns = 0
 
-    // --- adaptive shrink (docs/MAC_APP.md §1) ---
+    // --- adaptive shrink (the README) ---
     //
     // Priming overshoots. We wait for `primeFrames`, but audio arrives in indivisible
     // 1920-frame bursts, so we cross the threshold mid-burst and begin playback holding

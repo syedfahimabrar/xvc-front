@@ -3,7 +3,7 @@
 #
 # We never vendor or patch BlackHole's sources — the build clones them at a pinned tag and
 # injects our names with clang's `-include` (see xvcmic_names.h for why not -D). Upstream
-# fixes rebase for free. See docs/MAC_APP.md §2.
+# fixes rebase for free. See the README
 #
 #   ./build.sh            build build/XVCMic.driver
 #   ./build.sh install    install to /Library/Audio/Plug-Ins/HAL (asks for your password)
@@ -68,7 +68,7 @@ rm -rf "$OUT"
 echo "[driver] building \"$DEVICE_NAME\" (2ch, 44.1/48 kHz) ..."
 
 # Ad-hoc signature: a HAL plug-in is user-space, not a kext, so no Apple entitlement is
-# needed for local use. Distribution needs a Developer ID cert + notarization (MAC_APP.md §2).
+# needed for local use. Distribution needs a Developer ID cert + notarization (the README).
 xcodebuild \
     -project "$SRC/BlackHole.xcodeproj" \
     -configuration Release \

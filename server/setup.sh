@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-command provisioning for the dedicated X-VC box (docs/BACKEND.md §7).
+# One-command provisioning for the dedicated X-VC box (the README).
 #
 # Superset of bootstrap.sh: gets the environment + models in place (that script), then
 # adds TLS certs, an auth token, a systemd unit, and a Phase-0 benchmark run.
@@ -54,11 +54,11 @@ UV="$(command -v uv || echo "$HOME/.local/bin/uv")"
 LAUNCH="$HOME/xvc-run.sh"
 cat > "$LAUNCH" <<LAUNCH
 #!/usr/bin/env bash
-# Start the XVC server. Env chosen by setup.sh; tuning per docs/BENCHMARKS.md.
+# Start the XVC server. Env chosen by setup.sh; tuning per the README.
 cd "$XVC_DIR" || exit 1
 export XVC_DIR="$XVC_DIR" SSL_DIR="$SSL_DIR" MEANVC_PORT=$PORT
 export XVC_AUTH_TOKEN="\$(cat "$TOKEN_FILE")"
-export XVC_CHUNK_MS=\${XVC_CHUNK_MS:-2400} XVC_CURRENT_MS=\${XVC_CURRENT_MS:-120}
+export XVC_CHUNK_MS=\${XVC_CHUNK_MS:-2400} XVC_CURRENT_MS=\${XVC_CURRENT_MS:-240}
 exec "$UV" run --project "$SERVER_DIR" python "$SERVER_DIR/xvc_server.py"
 LAUNCH
 chmod +x "$LAUNCH"

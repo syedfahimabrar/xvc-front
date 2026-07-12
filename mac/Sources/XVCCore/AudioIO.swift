@@ -9,7 +9,7 @@ import AVFoundation
 /// server. The tell was the reported mic rate flipping from 48 kHz to 16 kHz.
 ///
 /// So `captureEngine` stays on the default input device and `playoutEngine` owns the output
-/// device. This is what docs/MAC_APP.md §1 prescribes.
+/// device. This is what the README prescribes.
 public final class AudioIO {
     public private(set) var captureEngine = AVAudioEngine()
     public private(set) var playoutEngine = AVAudioEngine()
