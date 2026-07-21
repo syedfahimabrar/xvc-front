@@ -65,7 +65,7 @@ cannot run on the Mac or on CPU in real time.
 ### One-command setup
 
 ```bash
-git clone https://github.com/syedfahimabrar/xvc-front.git
+git clone https://github.com/smfabrar/xvc-front.git
 cd xvc-front/server
 XVC_DIR=~/X-VC ./setup.sh
 ```
@@ -164,7 +164,7 @@ the settings change how the cross-fades sound, not just the delay.
 Open **Terminal** and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/syedfahimabrar/xvc-front/main/mac/installer/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/smfabrar/xvc-front/main/mac/installer/install.sh | bash
 ```
 
 This downloads the installer, installs **XVC Live Mic** into `/Applications`, installs the
@@ -177,7 +177,7 @@ you ever quit it, reopen it from `/Applications`.
 <details>
 <summary>Prefer to install manually?</summary>
 
-Download `XVCLiveMic.pkg` from the [latest release](https://github.com/syedfahimabrar/xvc-front/releases/latest),
+Download `XVCLiveMic.pkg` from the [latest release](https://github.com/smfabrar/xvc-front/releases/latest),
 then in Terminal:
 
 ```bash
@@ -217,7 +217,7 @@ your meeting app. **Right-click** opens the full menu (target picker, settings, 
 ### Uninstall
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/syedfahimabrar/xvc-front/main/mac/installer/uninstall.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/smfabrar/xvc-front/main/mac/installer/uninstall.sh)
 ```
 
 Removes the app, the XVC Mic device, and its saved settings.
